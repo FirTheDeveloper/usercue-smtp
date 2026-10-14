@@ -1,0 +1,34 @@
+import { Hono } from "hono";
+import type { AppEnv } from "../middleware";
+import { ogEntry, ogPost, renderEntryCard, renderPostCard } from "../og";
+import { changelogFlags, workspaceAccent } from "../workspace";
+
+function idFromFile(file: string): number | null {
+  const match = /^(\d+)\.png$/.exec(file);
+  return match ? Number(match[1]) : null;
+}
+
+const headers = {
+  "Content-Type": "image/png",
+  "Cache-Control": "public, max-age=300",
+};
+
+export const og = new Hono<AppEnv>()
+  .get("/post/:file", async (c) => {
+    const id = idFromFile(c.req.param("file"));
+    if (!id) return c.notFound();
+    const post = await ogPost.get(id);
+    if (!post) return c.notFound();
+    const png = await renderPostCard(post, await workspaceAccent());
+    return new Response(png as unknown as BodyInit, { status: 200, headers });
+  })
+
+  .get("/changelog/:file", async (c) => {
+    const id = idFromFile(c.req.param("file"));
+    if (!id) return c.notFound();
+    if (!(await changelogFlags()).enabled) return c.notFound();
+    const entry = await ogEntry.get(id);
+    if (!entry) return c.notFound();
+    const png = await renderEntryCard(entry, await workspaceAccent());
+    return new Response(png as unknown as BodyInit, { status: 200, headers });
+  });

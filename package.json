@@ -1,0 +1,23 @@
+{
+  "name": "usercue",
+  "private": true,
+  "license": "PolyForm-Noncommercial-1.0.0",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "bun run --parallel --filter '@usercue/*' dev",
+    "docker:dev": "docker compose -f docker-compose.dev.yml up --build",
+    "docker:dev:down": "docker compose -f docker-compose.dev.yml down",
+    "build": "bun run --filter @usercue/web build",
+    "start": "bun run --filter @usercue/server start",
+    "typecheck": "bun run --filter '*' typecheck",
+    "lint": "biome check .",
+    "format": "biome check --write ."
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.2.0",
+    "typescript": "^5.9.0"
+  }
+}

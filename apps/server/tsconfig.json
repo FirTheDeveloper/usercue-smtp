@@ -1,0 +1,6 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": { "types": ["bun"], "jsx": "react-jsx" },
+  "include": ["src"],
+  "exclude": ["src/roles.ts"]
+}

@@ -1,0 +1,11 @@
+export const env = {
+  port: Number(process.env.PORT ?? 3000),
+  databaseUrl: process.env.DATABASE_URL ?? "postgres://usercue:usercue@localhost:5432/usercue",
+  dataDir: process.env.DATA_DIR ?? "data",
+  cookieSecure: process.env.COOKIE_SECURE === "true",
+  production: process.env.NODE_ENV === "production",
+  secretKey: process.env.SECRET_KEY ?? "",
+  publicUrl: process.env.PUBLIC_URL ?? "",
+  resendApiKey: process.env.RESEND_API_KEY ?? "",
+  resendFrom: process.env.RESEND_FROM ?? "",
+};

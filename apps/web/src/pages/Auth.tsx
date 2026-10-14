@@ -1,0 +1,128 @@
+import { type FormEvent, useState } from "react";
+import { Link, useLocation, useSearch } from "wouter";
+import { OAuthButtons } from "../components/OAuthButtons";
+import { Logo } from "../components/PublicLayout";
+import { ThemeToggle } from "../components/ThemeToggle";
+import { ErrorText } from "../components/ui";
+import { useAuth, useAuthMethods } from "../lib/queries";
+
+export function AuthPage({ mode }: { mode: "login" | "setup" | "signin" }) {
+  const { login, setup } = useAuth();
+  const { data: methods } = useAuthMethods();
+  const [, navigate] = useLocation();
+  const oauthError = new URLSearchParams(useSearch()).get("error");
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+
+  const isSetup = mode === "setup";
+  const isSignin = mode === "signin";
+  const mutation = isSetup ? setup : login;
+  const showOAuth = !isSetup && Boolean(methods?.providers.length);
+
+  function submit(e: FormEvent) {
+    e.preventDefault();
+    const onSuccess = () => navigate("/admin");
+    if (isSetup) setup.mutate({ name, email, password }, { onSuccess });
+    else login.mutate({ email, password }, { onSuccess });
+  }
+
+  return (
+    <div className="relative flex min-h-dvh items-center justify-center px-4">
+      <div className="absolute top-4 right-4">
+        <ThemeToggle />
+      </div>
+      <form onSubmit={submit} className="flex w-full max-w-sm animate-in flex-col gap-3">
+        <div className="mb-4 flex flex-col items-center gap-3 text-center">
+          <Logo />
+          <div>
+            <h1 className="text-base font-semibold tracking-tight">
+              {isSetup ? "Create your workspace" : isSignin ? "Sign in" : "Workspace login"}
+            </h1>
+            <p className="mt-1 text-muted">
+              {isSetup
+                ? "This account will own the workspace."
+                : isSignin
+                  ? "Use a connected account to post and comment."
+                  : "Welcome back."}
+            </p>
+          </div>
+        </div>
+
+        {oauthError && <p className="text-center text-xs text-rose-500">{oauthError}</p>}
+
+        {showOAuth && (
+          <>
+            <OAuthButtons next={isSignin ? "board" : "admin"} />
+            {!isSignin && (
+              <div className="flex items-center gap-3 text-[11px] tracking-[0.12em] text-faint uppercase">
+                <span className="h-px flex-1 bg-line" />
+                or
+                <span className="h-px flex-1 bg-line" />
+              </div>
+            )}
+          </>
+        )}
+
+        {isSignin && (
+          <p className="mt-2 text-center text-[12px] text-muted">
+            {showOAuth ? (
+              <>
+                Staff?{" "}
+                <Link href="/login" className="text-fg underline-offset-2 hover:underline">
+                  Workspace login
+                </Link>
+              </>
+            ) : (
+              <>
+                Sign-in isn&apos;t configured yet.{" "}
+                <Link href="/login" className="text-fg underline-offset-2 hover:underline">
+                  Staff can log in here
+                </Link>
+                .
+              </>
+            )}
+          </p>
+        )}
+
+        {!isSignin && (
+          <>
+            {isSetup && (
+              <input
+                className="input h-9"
+                placeholder="Name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                autoComplete="name"
+                required
+              />
+            )}
+            <input
+              className="input h-9"
+              type="email"
+              placeholder="Email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              autoComplete="email"
+              required
+            />
+            <input
+              className="input h-9"
+              type="password"
+              placeholder="Password (min. 8 characters)"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              autoComplete={isSetup ? "new-password" : "current-password"}
+              minLength={8}
+              required
+            />
+            <ErrorText error={mutation.error} />
+            <button type="submit" className="btn-primary mt-1 h-9" disabled={mutation.isPending}>
+              {isSetup ? "Create workspace" : "Continue"}
+            </button>
+          </>
+        )}
+      </form>
+    </div>
+  );
+}

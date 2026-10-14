@@ -1,0 +1,29 @@
+{
+  "name": "@usercue/web",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --configLoader native",
+    "build": "vite build && bun scripts/precompress.ts",
+    "preview": "vite preview",
+    "typecheck": "tsc -p ."
+  },
+  "dependencies": {
+    "@fontsource-variable/geist": "^5.3.0",
+    "@tanstack/react-query": "^5.90.0",
+    "@usercue/shared": "workspace:*",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "wouter": "^3.7.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.1.0",
+    "@types/bun": "latest",
+    "@types/react": "^19.1.0",
+    "@types/react-dom": "^19.1.0",
+    "@usercue/server": "workspace:*",
+    "@vitejs/plugin-react": "^5.0.0",
+    "tailwindcss": "^4.1.0",
+    "vite": "^7.1.0"
+  }
+}
