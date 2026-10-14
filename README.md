@@ -59,7 +59,7 @@ Copy `.env.example` if you need to point at another database, turn on secure coo
 
 ## Built with
 
-[![Bun, React, Hono, PostgreSQL, and Tailwind CSS](https://skillicons.dev/icons?i=bun,react,hono,postgres,tailwind)](https://skillicons.dev)
+[![Bun, React, PostgreSQL, and Tailwind CSS](https://skillicons.dev/icons?i=bun,react,postgres,tailwind)](https://skillicons.dev)
 
 The React app is `apps/web`. The API is `apps/server`. Shared types and limits are `packages/shared`. Schema is applied from `apps/server/src/db.ts` on startup. Pages talk to the API through the typed client in `apps/web/src/lib/api.ts`. They do not talk to Postgres.
 
@@ -72,7 +72,11 @@ Product setup, OAuth, and settings are in the [documentation](https://docs.userc
 These are the people who have helped shape UserCue
 
 <a href="https://github.com/Paddlewheel-Inc/usercue/graphs/contributors">
+<<<<<<< HEAD
   <img src="https://contrib.rocks/image?repo=Paddlewheel-Inc/usercue-new" alt="People who have committed to UserCue" />
+=======
+  <img src="https://contrib.rocks/image?repo=Paddlewheel-Inc/usercue" alt="People who have committed to UserCue" />
+>>>>>>> e570c32 (fix this again)
 </a>
 
 ## License
