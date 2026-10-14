@@ -71,7 +71,7 @@ Product setup, OAuth, and settings are in the [documentation](https://docs.userc
 
 These are the people who have helped shape UserCue
 
-<a href="https://github.com/Paddlewheel-Inc/usercue-new/graphs/contributors">
+<a href="https://github.com/Paddlewheel-Inc/usercue/graphs/contributors">
   <img src="https://contrib.rocks/image?repo=Paddlewheel-Inc/usercue-new" alt="People who have committed to UserCue" />
 </a>
 
