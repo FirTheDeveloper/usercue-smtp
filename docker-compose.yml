@@ -20,11 +20,11 @@ services:
     build: .
     restart: unless-stopped
     ports:
-      - "${OUTBOUND_APP_PORT:-3000}:3000"
+      - "${PORT:-3000}:${PORT:-3000}"
     environment:
       DATABASE_URL: postgres://usercue:${POSTGRES_PASSWORD:-usercue}@postgres:5432/usercue
       DATA_DIR: /data
-      PORT: "3000"
+      PORT: ${PORT:-3000}
       COOKIE_SECURE: ${COOKIE_SECURE:-false}
       SECRET_KEY: ${SECRET_KEY:-}
       PUBLIC_URL: ${PUBLIC_URL:-http://localhost:3000}
