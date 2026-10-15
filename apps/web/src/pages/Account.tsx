@@ -1,4 +1,5 @@
 import { type FormEvent, useEffect, useRef, useState } from "react";
+import { Check } from "../components/icons";
 import { ProviderIcon } from "../components/OAuthButtons";
 import { Avatar, ErrorText } from "../components/ui";
 import { uploadImage } from "../lib/api";
@@ -111,10 +112,16 @@ export function Account() {
 
         <div className="flex items-center gap-2">
           <ErrorText error={save.error} />
-          {saved && !save.error && <p className="text-[12px] text-muted">Saved</p>}
           <div className="flex-1" />
           <button type="submit" className="btn-primary" disabled={save.isPending}>
-            Save
+            {saved && !save.error ? (
+              <>
+                <Check width={12} height={12} />
+                Saved
+              </>
+            ) : (
+              "Save"
+            )}
           </button>
         </div>
       </form>
