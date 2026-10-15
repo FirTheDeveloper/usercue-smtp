@@ -31,7 +31,7 @@ export function Feedback() {
 
       <div className="flex flex-col gap-3">
         {boards.length > 1 && (
-          <nav className="flex gap-1">
+          <nav className="flex flex-wrap gap-1">
             {boards.map((b) => (
               <Link
                 key={b.slug}
@@ -74,7 +74,7 @@ export function Feedback() {
               onChange={(e) => setSearch(e.target.value)}
             />
           </div>
-              <div className="flex rounded-full bg-hover/80 p-0.5">
+          <div className="flex rounded-full bg-hover/80 p-0.5">
             {SORT_OPTIONS.map((o) => (
               <button
                 key={o.value}

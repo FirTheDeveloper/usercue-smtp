@@ -500,6 +500,9 @@ export function useUpdateRole() {
       qc.setQueryData(["settings-roles"], data);
       qc.invalidateQueries({ queryKey: ["posts"] });
       qc.invalidateQueries({ queryKey: ["post"] });
+      qc.invalidateQueries({ queryKey: ["settings-users"] });
+      qc.invalidateQueries({ queryKey: ["settings"] });
+      qc.invalidateQueries({ queryKey: ["me"] });
     },
   });
 }

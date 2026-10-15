@@ -36,6 +36,16 @@ export const More = (p: P) => (
     <circle cx="12" cy="8" r="1.35" />
   </Icon>
 );
+export const Menu = (p: P) => (
+  <Icon {...p}>
+    <path d="M3 4.5h10M3 8h10M3 11.5h10" />
+  </Icon>
+);
+export const Close = (p: P) => (
+  <Icon {...p}>
+    <path d="m4 4 8 8M12 4l-8 8" />
+  </Icon>
+);
 export const Hash = (p: P) => (
   <Icon {...p}>
     <path d="M6.2 3.5 5 12.5M11 3.5 9.8 12.5M3.5 6.2h10M3.5 9.8h10" />

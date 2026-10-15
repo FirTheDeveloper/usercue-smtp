@@ -30,8 +30,8 @@ services:
       DATABASE_URL: postgres://usercue:${POSTGRES_PASSWORD:-usercue}@postgres:5432/usercue
       DATA_DIR: /data
       PORT: "3000"
-      COOKIE_SECURE: "false"
-      PUBLIC_URL: http://localhost:5173
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      PUBLIC_URL: ${PUBLIC_URL:-http://localhost:5173}
     volumes:
       - .:/app
       - node_modules:/app/node_modules
@@ -39,6 +39,16 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    profiles: ["tunnel"]
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN:?Set CLOUDFLARE_TUNNEL_TOKEN in .env to use the tunnel profile}
+    depends_on:
+      - app
 
 volumes:
   postgres_dev:

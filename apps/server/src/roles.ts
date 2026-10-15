@@ -5,9 +5,9 @@ const OWNER_PERMS = PERMISSIONS.slice();
 const STAFF_PERMS = ["dashboard", "manage_posts", "manage_boards"] satisfies Permission[];
 
 const insertRole = db.query<{ id: number }>(
-  "INSERT INTO roles (name, locked, permissions) VALUES (?, ?, ?) RETURNING id",
+  "INSERT INTO roles (name, key, locked, permissions) VALUES (?, ?, ?, ?) RETURNING id",
 );
-const findRole = db.query<{ id: number }>("SELECT id FROM roles WHERE name = ?");
+const findRoleByKey = db.query<{ id: number }>("SELECT id FROM roles WHERE key = ?");
 
 interface UserRoleRow {
   id: number;
@@ -68,26 +68,27 @@ export function hasPermission(
 
 async function ensureRole(
   name: string,
+  key: string,
   locked: number,
   permissions: Permission[],
 ): Promise<number> {
-  const existing = await findRole.get(name);
+  const existing = await findRoleByKey.get(key);
   if (existing) return existing.id;
-  const row = await insertRole.get(name, locked, encodePermissions(permissions));
+  const row = await insertRole.get(name, key, locked, encodePermissions(permissions));
   if (!row) throw new Error(`Could not create the ${name} role`);
   return row.id;
 }
 
 export async function ownerRoleId(): Promise<number> {
-  return ensureRole("Owner", 1, OWNER_PERMS);
+  return ensureRole("Owner", "owner", 1, OWNER_PERMS);
 }
 
 export async function staffRoleId(): Promise<number> {
-  return ensureRole("Staff", 0, STAFF_PERMS);
+  return ensureRole("Staff", "staff", 0, STAFF_PERMS);
 }
 
 export async function memberRoleId(): Promise<number> {
-  return ensureRole("Member", 0, []);
+  return ensureRole("Member", "member", 0, []);
 }
 
 export async function isOwnerRole(roleId: number | null | undefined): Promise<boolean> {
