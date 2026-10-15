@@ -415,7 +415,7 @@ function CustomAccent({
         className={`h-8 rounded-full px-3 text-[13px] transition-colors ${
           selected
             ? "bg-surface font-medium text-fg shadow-(--shadow)"
-            : "text-muted hover:bg-hover hover:text-fg"
+            : "bg-hover text-fg hover:bg-line"
         }`}
         disabled={disabled || !normalized || normalized === value}
         onClick={apply}

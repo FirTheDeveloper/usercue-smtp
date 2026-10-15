@@ -179,7 +179,7 @@ function PhotoField() {
           {user.avatarUrl && (
             <button
               type="button"
-              className="btn-quiet text-rose-500 hover:bg-rose-500/10 hover:text-rose-500"
+              className="btn-quiet bg-rose-500/10 text-rose-500 hover:bg-rose-500/15"
               disabled={busy || save.isPending}
               onClick={() => {
                 setError(null);

@@ -255,7 +255,7 @@
 }
 
 @utility btn-quiet {
-  @apply btn text-muted hover:bg-hover hover:text-fg;
+  @apply btn bg-hover text-fg hover:bg-line;
 }
 
 @utility input {

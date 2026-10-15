@@ -522,7 +522,7 @@ function CommentItem({
             type="button"
             aria-expanded={active}
             className={`rounded-full px-2 py-0.5 text-[12px] font-medium transition-colors ${
-              active ? "bg-hover text-fg" : "text-muted hover:bg-hover hover:text-fg"
+              active ? "bg-accent-soft text-accent-text" : "bg-hover text-fg hover:bg-line"
             }`}
             onClick={onReply}
           >
@@ -531,7 +531,7 @@ function CommentItem({
           {staff && (
             <button
               type="button"
-              className="rounded-full px-2 py-0.5 text-[12px] font-medium text-muted transition-colors hover:bg-hover hover:text-fg"
+              className="rounded-full bg-hover px-2 py-0.5 text-[12px] font-medium text-fg transition-colors hover:bg-line"
               disabled={remove.isPending}
               onClick={() => {
                 const message = hasReplies
