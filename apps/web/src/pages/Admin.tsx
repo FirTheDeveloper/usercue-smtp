@@ -413,7 +413,7 @@ export function AdminShell({
 }) {
   const filter = parseFilter(useSearch());
   return (
-    <div className="flex h-dvh overflow-hidden bg-bg">
+    <div className="relative flex h-dvh overflow-hidden bg-bg">
       <Sidebar filter={filter} settings={settings} dashboard={dashboard} />
       {children}
     </div>

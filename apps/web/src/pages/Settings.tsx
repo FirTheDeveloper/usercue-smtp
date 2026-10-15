@@ -375,7 +375,7 @@ function CustomAccent({
   return (
     <div className="flex flex-wrap items-center gap-2">
       <label
-        className={`inline-flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-full border p-0.5 transition-colors ${
+        className={`relative inline-flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-full border p-0.5 transition-colors ${
           selected ? "border-accent" : "border-line hover:border-muted"
         }`}
         style={
