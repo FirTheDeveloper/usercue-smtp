@@ -24,6 +24,7 @@ export interface WorkspaceRow {
   teams_enabled: number;
   teams_webhook_cipher: string;
   teams_webhook_hash: string;
+  oauth_only: number;
 }
 
 export interface StaffAssignee {
@@ -52,7 +53,8 @@ const update = db.query(
      discord_webhook_hash = ?,
      teams_enabled = ?,
      teams_webhook_cipher = ?,
-     teams_webhook_hash = ?
+     teams_webhook_hash = ?,
+     oauth_only = ?
    WHERE id = 1`,
 );
 const setCursor = db.query("UPDATE workspace SET assignment_cursor = ? WHERE id = 1");
@@ -85,6 +87,7 @@ const empty: WorkspaceRow = {
   teams_enabled: 0,
   teams_webhook_cipher: "",
   teams_webhook_hash: "",
+  oauth_only: 0,
 };
 
 export function parseAssignmentMode(value: string | null | undefined): AssignmentMode {
@@ -121,6 +124,7 @@ export async function saveWorkspace(patch: {
   discordWebhookUrl?: string;
   teamsEnabled?: boolean;
   teamsWebhookUrl?: string;
+  oauthOnly?: boolean;
 }) {
   const current = await getWorkspace();
   const allow =
@@ -168,6 +172,7 @@ export async function saveWorkspace(patch: {
   const teamsHash = patch.teamsWebhookUrl?.trim()
     ? hashSecret(patch.teamsWebhookUrl.trim())
     : current.teams_webhook_hash;
+  const oauth = flag(patch.oauthOnly, current.oauth_only);
   await update.run(
     allow,
     resend,
@@ -187,8 +192,13 @@ export async function saveWorkspace(patch: {
     teams,
     teamsCipher,
     teamsHash,
+    oauth,
   );
   return getWorkspace();
+}
+
+export async function oauthOnly() {
+  return (await getWorkspace()).oauth_only === 1;
 }
 
 export interface ChangelogFlags {

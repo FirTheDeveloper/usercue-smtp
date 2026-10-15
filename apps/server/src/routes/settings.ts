@@ -27,6 +27,9 @@ import {
 import { getWorkspace, parseAccent, parseAssignmentMode, saveWorkspace } from "../workspace";
 
 const INVITE_TTL = 60 * 60 * 24 * 7;
+const countEnabledProviders = db.query<{ n: number }>(
+  "SELECT COUNT(*)::int AS n FROM oauth_providers WHERE enabled = 1",
+);
 
 interface StaffRow {
   id: number;
@@ -210,6 +213,7 @@ async function snapshot(origin: string) {
       enabled: workspace.teams_enabled === 1,
       keyHash: workspace.teams_webhook_hash ? workspace.teams_webhook_hash.slice(0, 12) : null,
     },
+    oauthOnly: workspace.oauth_only === 1,
     staff: (await listPeople.all()).filter(isStaffRow).map((row) => ({
       id: row.id,
       email: row.email,
@@ -269,6 +273,7 @@ export const settings = new Hono<AppEnv>()
         discordWebhookUrl: v.optional(v.pipe(v.string(), v.trim(), v.maxLength(200))),
         teamsEnabled: v.optional(v.boolean()),
         teamsWebhookUrl: v.optional(v.pipe(v.string(), v.trim(), v.maxLength(2000))),
+        oauthOnly: v.optional(v.boolean()),
       }),
     ),
     async (c) => {
@@ -295,6 +300,15 @@ export const settings = new Hono<AppEnv>()
       }
       if (body.teamsEnabled && !teamsUrl && !current.teams_webhook_cipher) {
         return c.json({ error: "Add a Teams webhook URL first." }, 400);
+      }
+      if (body.oauthOnly) {
+        const enabled = await countEnabledProviders.get();
+        if (!enabled?.n) {
+          return c.json(
+            { error: "Turn on a sign-in method before requiring a connected account." },
+            400,
+          );
+        }
       }
       const logoOk = (value: string | undefined) =>
         !value || /^\/api\/uploads\/[A-Za-z0-9._-]+$/.test(value);

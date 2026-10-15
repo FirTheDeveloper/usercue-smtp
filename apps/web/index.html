@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="dark" style="color-scheme: dark">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -28,11 +28,16 @@
     <title>Usercue</title>
     <script>
       try {
-        if (localStorage.getItem("usercue-theme") === "dark") {
+        if (localStorage.getItem("usercue-theme-default") !== "dark") {
+          localStorage.removeItem("usercue-theme");
+          localStorage.setItem("usercue-theme-default", "dark");
+        }
+        if (localStorage.getItem("usercue-theme") === "light") {
+          delete document.documentElement.dataset.theme;
+          document.documentElement.style.colorScheme = "light";
+        } else {
           document.documentElement.dataset.theme = "dark";
           document.documentElement.style.colorScheme = "dark";
-        } else {
-          document.documentElement.style.colorScheme = "light";
         }
       } catch (e) {}
     </script>

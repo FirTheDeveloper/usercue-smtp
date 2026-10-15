@@ -17,6 +17,7 @@ import {
   assignmentMode,
   changelogFlags,
   guestsAllowed,
+  oauthOnly,
   workspaceAccent,
   workspaceLogos,
 } from "../workspace";
@@ -36,7 +37,11 @@ const insertUser = db.query<{ id: number }>(
   "INSERT INTO users (email, name, password_hash, role_id) VALUES (?, ?, ?, ?) RETURNING id",
 );
 const updateProfile = db.query(
-  "UPDATE users SET name = ?, password_hash = CASE WHEN ? <> '' THEN ? ELSE password_hash END WHERE id = ?",
+  `UPDATE users SET
+     name = ?,
+     password_hash = CASE WHEN ? <> '' THEN ? ELSE password_hash END,
+     avatar_url = CASE WHEN ? = 1 THEN ? ELSE avatar_url END
+   WHERE id = ?`,
 );
 const insertBoard = db.query(
   "INSERT INTO boards (slug, name) VALUES (?, ?) ON CONFLICT (slug) DO NOTHING",
@@ -91,6 +96,7 @@ export const auth = new Hono<AppEnv>()
         name: v.optional(v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(60))),
         password: v.optional(v.pipe(v.string(), v.minLength(8), v.maxLength(200))),
         currentPassword: v.optional(v.pipe(v.string(), v.maxLength(200))),
+        avatarUrl: v.optional(v.pipe(v.string(), v.trim(), v.maxLength(200))),
       }),
     ),
     async (c) => {
@@ -98,6 +104,9 @@ export const auth = new Hono<AppEnv>()
       if (!user) return c.json({ error: "Unauthorized" }, 401);
       const body = c.req.valid("json");
       const name = body.name?.trim() || user.name;
+      if (body.avatarUrl && !/^\/api\/uploads\/[A-Za-z0-9._-]+$/.test(body.avatarUrl)) {
+        return c.json({ error: "Upload a JPEG, PNG, or SVG image." }, 400);
+      }
       let hash = "";
       if (body.password) {
         if (user.hasPassword) {
@@ -111,12 +120,20 @@ export const auth = new Hono<AppEnv>()
         }
         hash = await Bun.password.hash(body.password);
       }
-      await updateProfile.run(name, hash, hash, user.id);
+      await updateProfile.run(
+        name,
+        hash,
+        hash,
+        body.avatarUrl === undefined ? 0 : 1,
+        body.avatarUrl ?? "",
+        user.id,
+      );
       return c.json({
         ok: true,
         user: toPublicUser({
           ...user,
           name,
+          avatarUrl: body.avatarUrl === undefined ? user.avatarUrl : body.avatarUrl || null,
           hasPassword: Boolean(hash) || user.hasPassword,
         }),
       });
@@ -137,6 +154,9 @@ export const auth = new Hono<AppEnv>()
   })
 
   .post("/login", rateLimit(10, 60), vValidator("json", credentials), async (c) => {
+    if (await oauthOnly()) {
+      return c.json({ error: "Sign in with a connected account." }, 403);
+    }
     const { email, password } = c.req.valid("json");
     const user = await findUser.get(email);
 

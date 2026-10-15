@@ -819,9 +819,25 @@ function GeneralSettings() {
 
 function AuthSettings() {
   const { data: providers, isLoading } = useProviders();
+  const { data: settings } = useSettings();
+  const save = useSaveSettings();
 
   return (
     <div className="flex flex-col gap-10">
+      <div className="flex flex-col gap-2">
+        <Checkbox
+          checked={settings?.oauthOnly ?? false}
+          disabled={save.isPending}
+          onChange={(checked) => save.mutate({ oauthOnly: checked })}
+        >
+          Require a connected account. Email and password stay off the login page.
+        </Checkbox>
+        <p className="pl-7 text-[12px] leading-5 text-muted">
+          Link a method to your own account before you turn this on. Password sign-in stops for
+          everyone, including staff.
+        </p>
+        <ErrorText error={save.error} />
+      </div>
       <p className="text-[12px] text-muted">
         Client secrets are hashed and encrypted at rest. The raw key is never shown again.
       </p>

@@ -9,6 +9,7 @@ import {
   randomToken,
   rateLimit,
   requirePermission,
+  requireUser,
   SESSION_TTL,
   setCookieSafe,
 } from "../middleware";
@@ -22,6 +23,7 @@ import {
 } from "../oauth";
 import { memberRoleId, staffRoleId } from "../roles";
 import { decryptSecret, encryptSecret, hashSecret, signPayload, verifyPayload } from "../secret";
+import { oauthOnly } from "../workspace";
 
 interface ProviderRow {
   provider: string;
@@ -57,21 +59,38 @@ const insertUser = db.query<{ id: number }>(
   "INSERT INTO users (email, name, password_hash, role_id, avatar_url) VALUES (?, ?, '', ?, ?) RETURNING id",
 );
 const applyProfile = db.query(
-  "UPDATE users SET name = ?, avatar_url = CASE WHEN ? <> '' THEN ? ELSE avatar_url END WHERE id = ?",
+  "UPDATE users SET name = ?, avatar_url = CASE WHEN avatar_url = '' AND ? <> '' THEN ? ELSE avatar_url END WHERE id = ?",
 );
 const insertOAuthAccount = db.query(
   "INSERT INTO oauth_accounts (provider, subject, user_id) VALUES (?, ?, ?) ON CONFLICT (provider, subject) DO NOTHING",
 );
-const insertSession = db.query("INSERT INTO sessions (id, user_id, expires_at) VALUES (?, ?, ?)");
-const upsertIdentity = db.query(
-  `INSERT INTO identities (visitor_id, provider, subject, name, email)
-   VALUES (?, ?, ?, ?, ?)
-   ON CONFLICT (visitor_id) DO UPDATE SET
-     provider = excluded.provider,
-     subject = excluded.subject,
-     name = excluded.name,
-     email = excluded.email`,
+const listLinks = db.query<{ provider: string }, [number]>(
+  "SELECT provider FROM oauth_accounts WHERE user_id = ? ORDER BY provider",
 );
+const deleteLink = db.query("DELETE FROM oauth_accounts WHERE user_id = ? AND provider = ?");
+const clearProviderForUser = db.query(
+  "DELETE FROM oauth_accounts WHERE user_id = ? AND provider = ? AND subject <> ?",
+);
+const insertSession = db.query("INSERT INTO sessions (id, user_id, expires_at) VALUES (?, ?, ?)");
+const clearIdentity = db.query(
+  "DELETE FROM identities WHERE visitor_id = ? OR (provider = ? AND subject = ?)",
+);
+const insertIdentity = db.query(
+  "INSERT INTO identities (visitor_id, provider, subject, name, email) VALUES (?, ?, ?, ?, ?)",
+);
+
+async function saveIdentity(
+  visitorId: string,
+  provider: string,
+  subject: string,
+  name: string,
+  email: string | null,
+) {
+  await db.transaction(async () => {
+    await clearIdentity.run(visitorId, provider, subject);
+    await insertIdentity.run(visitorId, provider, subject, name, email);
+  });
+}
 
 async function startSession(c: Parameters<typeof setCookieSafe>[0], userId: number) {
   const id = randomToken();
@@ -79,8 +98,12 @@ async function startSession(c: Parameters<typeof setCookieSafe>[0], userId: numb
   setCookieSafe(c, "sid", id, SESSION_TTL);
 }
 
-function fail(c: Parameters<typeof setCookieSafe>[0], next: "admin" | "board", message: string) {
-  const dest = next === "admin" ? "/login" : "/";
+function fail(
+  c: Parameters<typeof setCookieSafe>[0],
+  next: "admin" | "board" | "link",
+  message: string,
+) {
+  const dest = next === "admin" ? "/login" : next === "link" ? "/account" : "/";
   return c.redirect(`${dest}?error=${encodeURIComponent(message)}`);
 }
 
@@ -95,6 +118,7 @@ export const oauth = new Hono<AppEnv>()
         id,
         label: AUTH_PROVIDER_META[id].label,
       })),
+      passwordLogin: !(await oauthOnly()),
       redirects: Object.fromEntries(
         AUTH_PROVIDERS.map((id) => [id, redirectUrl(origin, id)]),
       ) as Record<string, string>,
@@ -164,6 +188,36 @@ export const oauth = new Hono<AppEnv>()
     return c.json({ ok: true });
   })
 
+  .get("/links", requireUser, async (c) => {
+    const rows = await listLinks.all(c.get("user")!.id);
+    return c.json({
+      accounts: rows.map((row) => ({
+        id: row.provider,
+        label: isProvider(row.provider) ? AUTH_PROVIDER_META[row.provider].label : row.provider,
+      })),
+    });
+  })
+
+  .delete("/links/:provider", requireUser, async (c) => {
+    const provider = c.req.param("provider");
+    if (!isProvider(provider)) return c.json({ error: "Unknown provider" }, 400);
+    const user = c.get("user")!;
+    const linked = await listLinks.all(user.id);
+    const owns = linked.some((row) => row.provider === provider);
+    if (!owns) return c.json({ ok: true });
+    if (linked.length <= 1 && !user.hasPassword) {
+      return c.json({ error: "Set a password before removing your only sign-in." }, 400);
+    }
+    if (linked.length <= 1 && (await oauthOnly())) {
+      return c.json(
+        { error: "This is your only way in while connected accounts are required." },
+        400,
+      );
+    }
+    await deleteLink.run(user.id, provider);
+    return c.json({ ok: true });
+  })
+
   .get("/oauth/:provider", rateLimit(20, 60), async (c) => {
     const provider = c.req.param("provider");
     if (!isProvider(provider)) return c.json({ error: "Unknown provider" }, 400);
@@ -171,14 +225,35 @@ export const oauth = new Hono<AppEnv>()
     if (!row || row.enabled !== 1)
       return c.json({ error: "This sign-in method is not enabled" }, 404);
 
-    const next = c.req.query("next") === "admin" ? "admin" : "board";
+    const requested = c.req.query("next");
+    const next = requested === "admin" ? "admin" : requested === "link" ? "link" : "board";
+    const user = c.get("user");
+    if (next === "link") {
+      if (!user) {
+        return c.redirect(
+          `/signin?error=${encodeURIComponent("Sign in before linking an account.")}`,
+        );
+      }
+      if (user.suspended) {
+        return c.redirect(
+          `/account?error=${encodeURIComponent("Your account has been suspended.")}`,
+        );
+      }
+    }
     const origin = publicOrigin(c);
     const callback = redirectUrl(origin, provider);
     const nonce = randomToken(16);
     const spec = PROVIDER_SPEC[provider];
     const verifier = spec.pkce ? randomToken(32) : undefined;
     const state = signPayload(
-      JSON.stringify({ n: nonce, next, p: provider, o: origin, v: verifier }),
+      JSON.stringify({
+        n: nonce,
+        next,
+        p: provider,
+        o: origin,
+        v: verifier,
+        u: next === "link" ? user?.id : undefined,
+      }),
     );
     setCookieSafe(c, "oauth", state, 60 * 10);
 
@@ -205,21 +280,24 @@ export const oauth = new Hono<AppEnv>()
     const packed = getCookie(c, "oauth");
     deleteCookie(c, "oauth", { path: "/" });
     const raw = packed ? verifyPayload(packed) : null;
-    let next: "admin" | "board" = "board";
+    let next: "admin" | "board" | "link" = "board";
     let origin = publicOrigin(c);
     let verifier: string | undefined;
+    let linkUserId: number | undefined;
     if (raw) {
       try {
         const parsed = JSON.parse(raw) as {
           n: string;
-          next: "admin" | "board";
+          next: "admin" | "board" | "link";
           p: string;
           o: string;
           v?: string;
+          u?: number;
         };
-        next = parsed.next;
+        next = parsed.next === "link" ? "link" : parsed.next === "admin" ? "admin" : "board";
         origin = parsed.o || origin;
         verifier = parsed.v;
+        linkUserId = parsed.u;
         if (parsed.p !== provider || parsed.n !== c.req.query("state")) {
           return fail(c, next, "Sign-in expired. Try again.");
         }
@@ -255,6 +333,25 @@ export const oauth = new Hono<AppEnv>()
         return fail(c, next, "This provider did not share an account id.");
       }
 
+      if (next === "link") {
+        const session = c.get("user");
+        if (!session || linkUserId !== session.id) {
+          return fail(c, next, "Sign in before linking an account.");
+        }
+        if (session.suspended) return fail(c, next, "Your account has been suspended.");
+        const taken = await findUserByOAuth.get(provider, profile.subject);
+        if (taken && taken.user_id !== session.id) {
+          return fail(c, next, "That login is already linked to another account.");
+        }
+        await insertOAuthAccount.run(provider, profile.subject, session.id);
+        const confirmed = await findUserByOAuth.get(provider, profile.subject);
+        if (confirmed?.user_id !== session.id) {
+          return fail(c, next, "That login is already linked to another account.");
+        }
+        await clearProviderForUser.run(session.id, provider, profile.subject);
+        return c.redirect("/account");
+      }
+
       const email = profile.email?.toLowerCase() ?? null;
       const linked = await findUserByOAuth.get(provider, profile.subject);
       let userId = linked?.user_id;
@@ -278,7 +375,7 @@ export const oauth = new Hono<AppEnv>()
 
       await insertOAuthAccount.run(provider, profile.subject, userId);
       await startSession(c, userId);
-      await upsertIdentity.run(
+      await saveIdentity(
         c.get("visitorId"),
         provider,
         profile.subject,

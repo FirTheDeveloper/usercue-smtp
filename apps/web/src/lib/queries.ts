@@ -280,6 +280,21 @@ export const useAuthMethods = () =>
     staleTime: 60_000,
   });
 
+export const useLinkedAccounts = () =>
+  useQuery({
+    queryKey: ["auth-links"],
+    queryFn: () => unwrap(api.auth.links.$get()),
+  });
+
+export function useUnlinkAccount() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (provider: string) =>
+      unwrap(api.auth.links[":provider"].$delete({ param: { provider } })),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["auth-links"] }),
+  });
+}
+
 export const useProviders = () =>
   useQuery({
     queryKey: ["auth-providers"],
@@ -341,11 +356,13 @@ export function useSaveSettings() {
       discordWebhookUrl?: string;
       teamsEnabled?: boolean;
       teamsWebhookUrl?: string;
+      oauthOnly?: boolean;
     }) => unwrap(api.settings.$patch({ json })),
     onSuccess: (data) => {
       applyAccent(data.accent);
       qc.setQueryData(["settings"], data);
       qc.invalidateQueries({ queryKey: ["me"] });
+      qc.invalidateQueries({ queryKey: ["auth-methods"] });
     },
   });
 }
@@ -470,9 +487,18 @@ export function useDeleteRole() {
 export function useUpdateProfile() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (json: { name?: string; password?: string; currentPassword?: string }) =>
-      unwrap(api.auth.me.$patch({ json })),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["me"] }),
+    mutationFn: (json: {
+      name?: string;
+      password?: string;
+      currentPassword?: string;
+      avatarUrl?: string;
+    }) => unwrap(api.auth.me.$patch({ json })),
+    onSuccess: () =>
+      Promise.all(
+        ["me", "posts", "post", "changelog", "settings", "settings-users"].map((key) =>
+          qc.invalidateQueries({ queryKey: [key] }),
+        ),
+      ),
   });
 }
 
@@ -501,7 +527,12 @@ export function useAuth() {
     }),
     logout: useMutation({
       mutationFn: () => unwrap(api.auth.logout.$post()),
-      onSuccess: refresh,
+      onSuccess: () => {
+        qc.setQueryData(["me"], (current) =>
+          current ? { ...current, user: null, identity: null } : current,
+        );
+        return refresh();
+      },
     }),
   };
 }

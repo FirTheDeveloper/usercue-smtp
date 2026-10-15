@@ -7,7 +7,7 @@ import { ThemeToggle } from "./ThemeToggle";
 import { Avatar } from "./ui";
 
 const LOGO = "/usercue.svg";
-const REPO = "https://github.com/usercue/usercue";
+const REPO = "https://github.com/Paddlewheel-Inc/usercue";
 const DOCS = "https://docs.usercue.app";
 const CHROME = "max-w-[1080px]";
 
@@ -275,14 +275,10 @@ export function PublicLayout({ children, wide = false }: { children: ReactNode; 
           <ThemeToggle />
           {me?.user ? (
             <AccountMenu />
-          ) : me?.identity ? (
-            <span className="inline-flex h-7 items-center px-3 text-[13px] text-muted">
-              {me.identity.name}
-            </span>
           ) : (
             <Link
               href="/signin"
-              className="inline-flex h-7 items-center rounded-full px-3 text-[13px] text-muted transition-colors hover:bg-hover hover:text-fg"
+              className="inline-flex h-7 shrink-0 items-center whitespace-nowrap rounded-full px-3 text-[13px] text-muted transition-colors hover:bg-hover hover:text-fg"
             >
               Sign in
             </Link>

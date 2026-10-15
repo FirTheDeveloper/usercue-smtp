@@ -8,7 +8,7 @@ import { useAuth, useAuthMethods } from "../lib/queries";
 
 export function AuthPage({ mode }: { mode: "login" | "setup" | "signin" }) {
   const { login, setup } = useAuth();
-  const { data: methods } = useAuthMethods();
+  const { data: methods, isFetched } = useAuthMethods();
   const [, navigate] = useLocation();
   const oauthError = new URLSearchParams(useSearch()).get("error");
   const [name, setName] = useState("");
@@ -19,6 +19,8 @@ export function AuthPage({ mode }: { mode: "login" | "setup" | "signin" }) {
   const isSignin = mode === "signin";
   const mutation = isSetup ? setup : login;
   const showOAuth = !isSetup && Boolean(methods?.providers.length);
+  const forceOAuth = isFetched && methods?.passwordLogin === false;
+  const showPassword = isSetup || (!isSignin && isFetched && !forceOAuth);
 
   function submit(e: FormEvent) {
     e.preventDefault();
@@ -34,16 +36,22 @@ export function AuthPage({ mode }: { mode: "login" | "setup" | "signin" }) {
       </div>
       <form onSubmit={submit} className="flex w-full max-w-sm animate-in flex-col gap-3">
         <div className="mb-4 flex flex-col items-center gap-3 text-center">
-          <Logo />
+          <Logo wordmark={false} />
           <div>
             <h1 className="text-base font-semibold tracking-tight">
-              {isSetup ? "Create your workspace" : isSignin ? "Sign in" : "Workspace login"}
+              {isSetup
+                ? "Create your workspace"
+                : isSignin || forceOAuth
+                  ? "Sign in"
+                  : "Workspace login"}
             </h1>
             <p className="mt-1 text-muted">
               {isSetup
                 ? "This account will own the workspace."
-                : isSignin
-                  ? "Use a connected account to post and comment."
+                : isSignin || forceOAuth
+                  ? isSignin
+                    ? "Use a connected account to post and comment."
+                    : "Use a connected account."
                   : "Welcome back."}
             </p>
           </div>
@@ -54,7 +62,7 @@ export function AuthPage({ mode }: { mode: "login" | "setup" | "signin" }) {
         {showOAuth && (
           <>
             <OAuthButtons next={isSignin ? "board" : "admin"} />
-            {!isSignin && (
+            {showPassword && (
               <div className="flex items-center gap-3 text-[11px] tracking-[0.12em] text-faint uppercase">
                 <span className="h-px flex-1 bg-line" />
                 or
@@ -64,7 +72,11 @@ export function AuthPage({ mode }: { mode: "login" | "setup" | "signin" }) {
           </>
         )}
 
-        {isSignin && (
+        {!showOAuth && forceOAuth && !isSignin && (
+          <p className="text-center text-[12px] text-muted">No sign-in methods are turned on.</p>
+        )}
+
+        {isSignin && !forceOAuth && (
           <p className="mt-2 text-center text-[12px] text-muted">
             {showOAuth ? (
               <>
@@ -85,7 +97,13 @@ export function AuthPage({ mode }: { mode: "login" | "setup" | "signin" }) {
           </p>
         )}
 
-        {!isSignin && (
+        {isSignin && forceOAuth && !showOAuth && (
+          <p className="mt-2 text-center text-[12px] text-muted">
+            Sign-in isn&apos;t configured yet.
+          </p>
+        )}
+
+        {showPassword && (
           <>
             {isSetup && (
               <input

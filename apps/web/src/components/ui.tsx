@@ -96,6 +96,7 @@ const AVATAR_SIZES = {
   xs: "size-4 text-[8px]",
   sm: "size-5 text-[9px]",
   md: "size-6 text-[10px]",
+  lg: "size-12 text-sm",
 } as const;
 
 function hueFor(name: string): number {

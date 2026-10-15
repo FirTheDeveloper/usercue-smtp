@@ -12,9 +12,9 @@ function read(): Theme {
 
 export function getTheme(): Theme {
   try {
-    return localStorage.getItem(KEY) === "dark" ? "dark" : "light";
+    return localStorage.getItem(KEY) === "light" ? "light" : "dark";
   } catch {
-    return "light";
+    return "dark";
   }
 }
 
@@ -36,7 +36,7 @@ export function useTheme() {
       return () => listeners.delete(onStoreChange);
     },
     read,
-    () => "light" as Theme,
+    () => "dark" as Theme,
   );
   return [theme, applyTheme] as const;
 }

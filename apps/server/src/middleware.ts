@@ -76,6 +76,7 @@ const findSession = db.query<SessionRow, [string, number]>(
 const findIdentity = db.query<VisitorIdentity, [string]>(
   "SELECT name, provider FROM identities WHERE visitor_id = ?",
 );
+const deleteIdentity = db.query("DELETE FROM identities WHERE visitor_id = ?");
 
 export function toPublicUser(user: SessionUser) {
   return {
@@ -121,7 +122,14 @@ export const identify = createMiddleware<AppEnv>(async (c, next) => {
   const sid = getCookie(c, "sid");
   const row = sid ? await findSession.get(sid, Math.floor(Date.now() / 1000)) : undefined;
   c.set("user", row ? toSessionUser(row) : null);
-  c.set("identity", (await findIdentity.get(visitorId)) ?? null);
+
+  const identity = (await findIdentity.get(visitorId)) ?? null;
+  if (!row && identity) {
+    await deleteIdentity.run(visitorId);
+    c.set("identity", null);
+  } else {
+    c.set("identity", identity);
+  }
 
   await next();
 });
