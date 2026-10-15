@@ -163,7 +163,7 @@ function PhotoField() {
           />
           <button
             type="button"
-            className="btn-quiet"
+            className="btn-ghost"
             disabled={busy || save.isPending}
             onClick={() => input.current?.click()}
           >
@@ -172,7 +172,7 @@ function PhotoField() {
           {user.avatarUrl && (
             <button
               type="button"
-              className="btn-quiet"
+              className="btn-quiet text-rose-500 hover:bg-rose-500/10 hover:text-rose-500"
               disabled={busy || save.isPending}
               onClick={() => {
                 setError(null);
