@@ -24,8 +24,6 @@ export function AuthPage({ mode }: { mode: "login" | "setup" | "signin" }) {
 
   function submit(e: FormEvent) {
     e.preventDefault();
-    // Setup leaves routing to App: navigating here runs before the new `me`
-    // reaches the tree, so the setup routes would bounce back to /setup.
     if (isSetup) setup.mutate({ name, email, password });
     else login.mutate({ email, password }, { onSuccess: () => navigate("/admin") });
   }

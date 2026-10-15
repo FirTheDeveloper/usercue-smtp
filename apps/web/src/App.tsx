@@ -64,8 +64,6 @@ export function App() {
       </Route>
       <Route path="/signin">{me.user ? <Redirect to="/" /> : <AuthPage mode="signin" />}</Route>
       <Route path="/setup">
-        {/* Go straight to the destination. A Redirect only navigates on mount,
-            so chaining /setup -> /login -> /admin would stop at /login. */}
         <Redirect to={me.user?.staff ? "/admin" : "/login"} />
       </Route>
       <Route path="/join/:token">
