@@ -60,7 +60,7 @@ function SidebarLink({
   return (
     <Link
       href={to}
-      className={`flex h-8 items-center gap-2.5 rounded-full px-2.5 text-[13px] transition-colors ${className} ${
+      className={`flex h-8 shrink-0 items-center gap-2.5 rounded-full px-2.5 text-[13px] transition-colors ${className} ${
         active
           ? "bg-accent-soft font-medium text-accent-text"
           : "text-muted hover:bg-hover hover:text-fg"
