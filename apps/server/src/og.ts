@@ -191,6 +191,7 @@ function card(options: {
       flexDirection: "column",
       width: 1200,
       height: 630,
+      boxSizing: "border-box",
       backgroundColor: "#141210",
       color: "#f5f3f0",
       fontFamily: "Geist",
