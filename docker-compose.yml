@@ -6,8 +6,6 @@ services:
       POSTGRES_USER: usercue
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-usercue}
       POSTGRES_DB: usercue
-    ports:
-      - "6556:6556"
     volumes:
       - postgres:/var/lib/postgresql/data
     healthcheck:
