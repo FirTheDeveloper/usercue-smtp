@@ -8,6 +8,7 @@ import { Avatar } from "./ui";
 
 const LOGO = "/usercue.svg";
 const REPO = "https://github.com/Paddlewheel-Inc/usercue";
+const PADDLEWHEEL = "https://paddlewheel.org";
 const DOCS = "https://docs.usercue.app";
 const CHROME = "max-w-[1080px]";
 
@@ -111,11 +112,26 @@ function Footer() {
           </p>
           <p className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[13px] leading-5 text-muted">
             a
-            <img src="/paddlewheel.svg" alt="Paddlewheel" className="paddlewheel-mark" />
+            <a
+              href={PADDLEWHEEL}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex transition-opacity hover:opacity-70"
+            >
+              <img src="/paddlewheel.svg" alt="Paddlewheel" className="paddlewheel-mark" />
+            </a>
             product
           </p>
           <p className="text-[12px] leading-5 text-faint">
-            {new Date().getFullYear()} UserCue by Paddlewheel Inc.
+            {new Date().getFullYear()} UserCue by{" "}
+            <a
+              href={PADDLEWHEEL}
+              target="_blank"
+              rel="noreferrer"
+              className="transition-colors hover:text-fg"
+            >
+              Paddlewheel Inc.
+            </a>
           </p>
         </div>
         <FooterCol title="Product">
