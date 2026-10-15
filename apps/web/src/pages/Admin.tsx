@@ -1,7 +1,24 @@
 import { STATUS_LABELS, STATUSES, type Status } from "@usercue/shared";
-import { type FormEvent, type ReactNode, useDeferredValue, useRef, useState } from "react";
+import {
+  type FormEvent,
+  type ReactNode,
+  useDeferredValue,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import { Link, useLocation, useParams, useSearch } from "wouter";
-import { Gear, Heart, Inbox, LogOut, Pen, Plus, Roadmap, Search } from "../components/icons";
+import {
+  Gear,
+  Heart,
+  Inbox,
+  LogOut,
+  Menu,
+  Pen,
+  Plus,
+  Roadmap,
+  Search,
+} from "../components/icons";
 import { PostDetail } from "../components/PostDetail";
 import { PostRow } from "../components/PostRow";
 import { Logo } from "../components/PublicLayout";
@@ -66,7 +83,9 @@ function SidebarLink({
           : "text-muted hover:bg-hover hover:text-fg"
       }`}
     >
-      <span className="flex min-w-0 flex-1 items-center gap-2.5">{children}</span>
+      <span className="flex min-w-0 flex-1 items-center gap-2.5">
+        {children}
+      </span>
       {count !== undefined && (
         <span
           className={`w-7 shrink-0 text-right text-[11px] tabular-nums ${
@@ -83,7 +102,9 @@ function SidebarLink({
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
     <nav className="flex flex-col gap-0.5">
-      <p className="px-2.5 pt-4 pb-1.5 text-[11px] font-medium text-faint">{title}</p>
+      <p className="px-2.5 pt-4 pb-1.5 text-[11px] font-medium text-faint">
+        {title}
+      </p>
       {children}
     </nav>
   );
@@ -93,28 +114,54 @@ function Sidebar({
   filter,
   settings = false,
   dashboard = false,
+  open = false,
+  onClose,
 }: {
   filter: Filter;
   settings?: boolean;
   dashboard?: boolean;
+  open?: boolean;
+  onClose?: () => void;
 }) {
   const { data: me } = useMe();
   const { data: boards = [] } = useBoards();
   const { data: counts } = useCounts(filter.board);
   const { logout } = useAuth();
   const [, navigate] = useLocation();
-  const total = counts ? Object.values(counts).reduce((a, b) => a + b, 0) : undefined;
+  const total = counts
+    ? Object.values(counts).reduce((a, b) => a + b, 0)
+    : undefined;
   const allActive = !dashboard && !settings && !filter.status;
 
+  useEffect(() => {
+    if (!open) return;
+    function onKey(event: KeyboardEvent) {
+      if (event.key === "Escape") onClose?.();
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [open, onClose]);
+
   return (
-    <aside className="hidden w-[16.5rem] shrink-0 flex-col p-3 md:flex">
+    <aside
+      onClick={(event) => {
+        if ((event.target as HTMLElement).closest("a")) onClose?.();
+      }}
+      className={`${
+        open ? "flex translate-x-0" : "hidden md:flex"
+      } fixed inset-y-0 left-0 z-50 w-[16.5rem] shrink-0 flex-col p-3 transition-transform md:static md:z-auto md:translate-x-0`}
+    >
       <div className="relative flex min-h-0 flex-1 flex-col overflow-y-auto rounded-[1.75rem] bg-surface px-3 pt-5 pb-3 shadow-[var(--shadow)]">
         <div
           aria-hidden
           className="pointer-events-none absolute inset-x-0 top-0 h-24 rounded-t-[1.75rem] bg-[radial-gradient(ellipse_at_top,color-mix(in_srgb,var(--accent)_16%,transparent),transparent_72%)]"
         />
 
-        <Link href="/admin" aria-label="Usercue" className="relative mb-5 flex justify-center pt-1">
+        <Link
+          href="/admin"
+          aria-label="Usercue"
+          className="relative mb-5 flex justify-center pt-1"
+        >
           <span className="scale-125">
             <Logo wordmark={false} />
           </span>
@@ -130,7 +177,11 @@ function Sidebar({
         </SidebarLink>
 
         <Section title="The pile">
-          <SidebarLink to={href({ board: filter.board })} active={allActive} count={total}>
+          <SidebarLink
+            to={href({ board: filter.board })}
+            active={allActive}
+            count={total}
+          >
             <Inbox className={allActive ? "text-accent" : "text-faint"} /> All
           </SidebarLink>
           {STATUSES.map((status) => {
@@ -157,7 +208,11 @@ function Sidebar({
           })}
         </Section>
 
-        <BoardsNav filter={filter} boards={boards} muted={dashboard || settings} />
+        <BoardsNav
+          filter={filter}
+          boards={boards}
+          muted={dashboard || settings}
+        />
 
         <Section title="The shop">
           <SidebarLink to="/roadmap" active={false}>
@@ -170,7 +225,8 @@ function Sidebar({
             can(me, "manage_users") ||
             can(me, "manage_roles")) && (
             <SidebarLink to="/admin/settings" active={settings}>
-              <Gear className={settings ? "text-accent" : "text-faint"} /> Settings
+              <Gear className={settings ? "text-accent" : "text-faint"} />{" "}
+              Settings
             </SidebarLink>
           )}
         </Section>
@@ -178,18 +234,28 @@ function Sidebar({
         <div className="relative mt-auto flex flex-col gap-1 pt-3">
           <ThemeToggle labeled />
           <div className="flex items-center gap-2 rounded-full px-2 py-1.5">
-            <Avatar name={me?.user?.name ?? "?"} src={me?.user?.avatarUrl} size="sm" />
+            <Avatar
+              name={me?.user?.name ?? "?"}
+              src={me?.user?.avatarUrl}
+              size="sm"
+            />
             <span className="min-w-0 flex-1 truncate text-[13px] font-medium">
               {me?.user?.name}
             </span>
             {me?.user?.staff && me.user.roleName && (
-              <RoleBadge name={me.user.roleName} iconUrl={me.user.roleIcon} size="xs" />
+              <RoleBadge
+                name={me.user.roleName}
+                iconUrl={me.user.roleIcon}
+                size="xs"
+              />
             )}
             <button
               type="button"
               className="inline-flex size-7 items-center justify-center rounded-full text-faint transition-colors hover:bg-hover hover:text-fg"
               aria-label="Sign out"
-              onClick={() => logout.mutate(undefined, { onSuccess: () => navigate("/") })}
+              onClick={() =>
+                logout.mutate(undefined, { onSuccess: () => navigate("/") })
+              }
             >
               <LogOut />
             </button>
@@ -225,7 +291,10 @@ function BoardRow({
       setValue(board.name);
       return;
     }
-    rename.mutate({ slug: board.slug, name: next }, { onError: () => setValue(board.name) });
+    rename.mutate(
+      { slug: board.slug, name: next },
+      { onError: () => setValue(board.name) },
+    );
   }
 
   if (editing) {
@@ -258,7 +327,11 @@ function BoardRow({
 
   return (
     <div className="group relative">
-      <SidebarLink to={href} active={active} className={canRename ? "pr-8" : ""}>
+      <SidebarLink
+        to={href}
+        active={active}
+        className={canRename ? "pr-8" : ""}
+      >
         <span
           className="size-1.5 shrink-0 rounded-full"
           style={{ background: `hsl(${hueFor(board.name)} 45% 52%)` }}
@@ -351,26 +424,40 @@ function BoardsNav({
   );
 }
 
-function RequestList({ filter, selected }: { filter: Filter; selected?: number }) {
+function RequestList({
+  filter,
+  selected,
+}: {
+  filter: Filter;
+  selected?: number;
+}) {
   const [search, setSearch] = useState("");
   const q = useDeferredValue(search.trim());
-  const { data: posts, isLoading } = usePosts({ ...filter, sort: "new", q: q || undefined });
+  const { data: posts, isLoading } = usePosts({
+    ...filter,
+    sort: "new",
+    q: q || undefined,
+  });
   const { data: counts } = useCounts(filter.board);
   const shown = filter.status
     ? counts?.[filter.status]
     : counts
-      ? Object.values(counts).reduce((a, b) => a + b, 0)
-      : undefined;
+    ? Object.values(counts).reduce((a, b) => a + b, 0)
+    : undefined;
 
   return (
     <section
-      className={`w-full min-w-0 shrink-0 flex-col md:flex md:w-96 ${selected ? "hidden" : "flex"}`}
+      className={`w-full min-w-0 shrink-0 flex-col md:flex md:w-96 ${
+        selected ? "hidden" : "flex"
+      }`}
     >
       <header className="flex h-14 shrink-0 items-center justify-between gap-3 px-5">
         <h2 className="flex items-baseline gap-2 text-[15px] font-semibold tracking-tight">
           {filter.status ? STATUS_LABELS[filter.status] : "Requests"}
           {shown !== undefined && (
-            <span className="text-[13px] font-medium text-faint tabular-nums">{shown}</span>
+            <span className="text-[13px] font-medium text-faint tabular-nums">
+              {shown}
+            </span>
           )}
         </h2>
       </header>
@@ -412,10 +499,47 @@ export function AdminShell({
   dashboard?: boolean;
 }) {
   const filter = parseFilter(useSearch());
+  const [location] = useLocation();
+  const [navOpen, setNavOpen] = useState(false);
+
+  useEffect(() => {
+    setNavOpen(false);
+  }, [location]);
+
   return (
-    <div className="relative flex h-dvh overflow-hidden bg-bg">
-      <Sidebar filter={filter} settings={settings} dashboard={dashboard} />
-      {children}
+    <div className="flex h-dvh flex-col overflow-hidden bg-bg">
+      <header className="flex h-14 shrink-0 items-center gap-2 border-b border-line px-4 md:hidden">
+        <button
+          type="button"
+          className="inline-flex size-8 shrink-0 items-center justify-center rounded-full text-muted transition-colors hover:bg-hover hover:text-fg"
+          aria-label="Open navigation"
+          aria-expanded={navOpen}
+          onClick={() => setNavOpen(true)}
+        >
+          <Menu />
+        </button>
+        <Link href="/admin" className="flex items-center">
+          <Logo compact wordmark={false} />
+        </Link>
+      </header>
+      <div className="relative flex min-h-0 flex-1 overflow-hidden">
+        {navOpen && (
+          <button
+            type="button"
+            aria-label="Close navigation"
+            className="fixed inset-0 z-40 bg-black/40 backdrop-blur-[1px] md:hidden"
+            onClick={() => setNavOpen(false)}
+          />
+        )}
+        <Sidebar
+          filter={filter}
+          settings={settings}
+          dashboard={dashboard}
+          open={navOpen}
+          onClose={() => setNavOpen(false)}
+        />
+        {children}
+      </div>
     </div>
   );
 }
@@ -430,17 +554,23 @@ export function Admin() {
     <AdminShell>
       <RequestList filter={filter} selected={selected} />
       <section
-        className={`min-w-0 flex-1 overflow-y-auto ${selected ? "block" : "hidden md:block"}`}
+        className={`min-w-0 flex-1 overflow-y-auto ${
+          selected ? "block" : "hidden md:block"
+        }`}
       >
         {selected ? (
-          <div className="mx-auto max-w-3xl px-8 py-10">
+          <div className="mx-auto max-w-3xl px-5 py-7 sm:px-8 sm:py-10">
             <Link
               href={href(filter)}
               className="mb-4 inline-block text-muted hover:text-fg md:hidden"
             >
               ← Back
             </Link>
-            <PostDetail key={selected} id={selected} onDeleted={() => navigate(href(filter))} />
+            <PostDetail
+              key={selected}
+              id={selected}
+              onDeleted={() => navigate(href(filter))}
+            />
           </div>
         ) : (
           <div className="flex h-full items-center justify-center">

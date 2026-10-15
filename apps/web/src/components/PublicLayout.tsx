@@ -2,7 +2,7 @@ import { type ReactNode, useEffect, useRef, useState } from "react";
 import { Link, useLocation, useSearch } from "wouter";
 import { useAuth, useMe } from "../lib/queries";
 import { useTheme } from "../lib/theme";
-import { ArrowUpRight, Gear, Home, LogOut } from "./icons";
+import { ArrowUpRight, Close, Gear, Home, LogOut, Menu } from "./icons";
 import { ThemeToggle } from "./ThemeToggle";
 import { Avatar } from "./ui";
 
@@ -12,7 +12,15 @@ const PADDLEWHEEL = "https://paddlewheel.org";
 const DOCS = "https://docs.usercue.app";
 const CHROME = "max-w-[1080px]";
 
-function NavLink({ href, children }: { href: string; children: ReactNode }) {
+function NavLink({
+  href,
+  children,
+  className = "",
+}: {
+  href: string;
+  children: ReactNode;
+  className?: string;
+}) {
   const [location] = useLocation();
   const current =
     href === "/"
@@ -22,7 +30,7 @@ function NavLink({ href, children }: { href: string; children: ReactNode }) {
   return (
     <Link
       href={href}
-      className={`inline-flex h-7 items-center rounded-full px-3 text-[13px] transition-colors ${
+      className={`inline-flex h-7 items-center rounded-full px-3 text-[13px] transition-colors ${className} ${
         current
           ? "bg-surface font-medium text-fg shadow-[var(--shadow)]"
           : "text-muted hover:bg-hover/70 hover:text-fg"
@@ -272,20 +280,26 @@ export function PublicLayout({ children, wide = false }: { children: ReactNode; 
   const { data: me } = useMe();
   const oauthError = new URLSearchParams(useSearch()).get("error");
   const widthClass = wide ? CHROME : "max-w-[720px]";
+  const [location] = useLocation();
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  useEffect(() => {
+    setMenuOpen(false);
+  }, [location]);
+
+  const showChangelog = Boolean(me?.changelogEnabled || me?.user?.staff);
 
   return (
     <div className="flex min-h-dvh flex-col bg-bg">
       <header className="sticky top-0 z-20 bg-bg/75 backdrop-blur-md">
-        <div className={`mx-auto flex h-14 w-full items-center gap-6 px-5 ${CHROME}`}>
+        <div className={`mx-auto flex h-14 w-full items-center gap-3 px-5 sm:gap-6 ${CHROME}`}>
           <Link href="/">
             <Logo compact wordmark={false} />
           </Link>
-          <nav className="flex items-center gap-1">
+          <nav className="hidden items-center gap-1 sm:flex">
             <NavLink href="/">Feedback</NavLink>
             <NavLink href="/roadmap">Roadmap</NavLink>
-            {(me?.changelogEnabled || me?.user?.staff) && (
-              <NavLink href="/changelog">Changelog</NavLink>
-            )}
+            {showChangelog && <NavLink href="/changelog">Changelog</NavLink>}
           </nav>
           <div className="flex-1" />
           <ThemeToggle />
@@ -294,12 +308,41 @@ export function PublicLayout({ children, wide = false }: { children: ReactNode; 
           ) : (
             <Link
               href="/signin"
-              className="inline-flex h-7 shrink-0 items-center whitespace-nowrap rounded-full px-3 text-[13px] text-muted transition-colors hover:bg-hover hover:text-fg"
+              className="hidden h-7 shrink-0 items-center whitespace-nowrap rounded-full px-3 text-[13px] text-muted transition-colors hover:bg-hover hover:text-fg sm:inline-flex"
             >
               Sign in
             </Link>
           )}
+          <button
+            type="button"
+            className="inline-flex size-8 shrink-0 items-center justify-center rounded-full text-muted transition-colors hover:bg-hover hover:text-fg sm:hidden"
+            aria-label={menuOpen ? "Close menu" : "Open menu"}
+            aria-expanded={menuOpen}
+            onClick={() => setMenuOpen((value) => !value)}
+          >
+            {menuOpen ? <Close /> : <Menu />}
+          </button>
         </div>
+        {menuOpen && (
+          <nav className={`mx-auto flex w-full flex-col gap-1 px-5 pb-4 sm:hidden ${CHROME}`}>
+            <NavLink href="/" className="h-9 text-[14px]">
+              Feedback
+            </NavLink>
+            <NavLink href="/roadmap" className="h-9 text-[14px]">
+              Roadmap
+            </NavLink>
+            {showChangelog && (
+              <NavLink href="/changelog" className="h-9 text-[14px]">
+                Changelog
+              </NavLink>
+            )}
+            {!me?.user && (
+              <NavLink href="/signin" className="h-9 text-[14px]">
+                Sign in
+              </NavLink>
+            )}
+          </nav>
+        )}
       </header>
       {oauthError && (
         <p className={`mx-auto w-full px-5 pt-4 text-center text-xs text-rose-500 ${CHROME}`}>

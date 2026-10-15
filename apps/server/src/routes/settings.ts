@@ -464,12 +464,8 @@ export const settings = new Hono<AppEnv>()
       if (!role) return c.json({ error: "Role not found" }, 404);
 
       const body = c.req.valid("json");
-      if (role.locked === 1) {
-        if (body.name !== undefined || body.permissions !== undefined) {
-          return c.json({ error: "This role cannot be edited." }, 400);
-        }
-        await updateRole.run(role.name, role.permissions, body.iconUrl ?? role.icon_url, id);
-        return c.json(await rolesPayload());
+      if (role.locked === 1 && body.permissions !== undefined) {
+        return c.json({ error: "This role's permissions are locked." }, 400);
       }
 
       const name = body.name?.trim() || role.name;

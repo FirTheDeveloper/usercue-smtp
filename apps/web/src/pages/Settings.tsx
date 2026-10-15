@@ -79,7 +79,7 @@ export function Settings() {
     return (
       <AdminShell settings>
         <section className="min-w-0 flex-1 overflow-y-auto">
-          <p className="px-8 py-8 text-muted">You don&apos;t have access to settings.</p>
+          <p className="px-5 py-8 text-muted sm:px-8">You don&apos;t have access to settings.</p>
         </section>
       </AdminShell>
     );
@@ -90,7 +90,9 @@ export function Settings() {
   return (
     <AdminShell settings>
       <section className="min-w-0 flex-1 overflow-y-auto">
-        <div className={`flex flex-col gap-7 px-8 py-10 ${wide ? "max-w-2xl" : "max-w-xl"}`}>
+        <div
+          className={`flex flex-col gap-7 px-5 py-7 sm:px-8 sm:py-10 ${wide ? "max-w-2xl" : "max-w-xl"}`}
+        >
           <header className="flex flex-col gap-4">
             <div>
               <h1 className="text-base font-semibold tracking-tight">Settings</h1>
@@ -1368,6 +1370,7 @@ function RolesSettings() {
   const [name, setName] = useState("");
   const [creating, setCreating] = useState<Permission[]>([]);
   const [editing, setEditing] = useState<number | null>(null);
+  const [draft, setDraft] = useState("");
 
   if (isLoading || !data) return null;
 
@@ -1382,6 +1385,23 @@ function RolesSettings() {
         },
       },
     );
+  }
+
+  function toggle(role: { id: number; name: string }) {
+    if (editing === role.id) {
+      setEditing(null);
+      return;
+    }
+    setEditing(role.id);
+    setDraft(role.name);
+  }
+
+  function submitRename(e: FormEvent) {
+    e.preventDefault();
+    const role = data?.roles.find((item) => item.id === editing);
+    const next = draft.trim();
+    if (!role || !next || next === role.name) return;
+    update.mutate({ id: role.id, name: next });
   }
 
   return (
@@ -1405,7 +1425,7 @@ function RolesSettings() {
                     <p className="text-[13px] font-medium">{role.name}</p>
                     <p className="text-[11px] text-faint">
                       {role.userCount} {role.userCount === 1 ? "user" : "users"}
-                      {role.locked ? " · Locked" : ""}
+                      {role.locked ? " · Permissions locked" : ""}
                     </p>
                   </div>
                   <RoleIconControl
@@ -1416,9 +1436,9 @@ function RolesSettings() {
                   <button
                     type="button"
                     className="btn-quiet h-7 px-2.5"
-                    onClick={() => setEditing(open ? null : role.id)}
+                    onClick={() => toggle(role)}
                   >
-                    {open ? "Close" : role.locked ? "View" : "Edit"}
+                    {open ? "Close" : "Edit"}
                   </button>
                   {!role.locked && (
                     <button
@@ -1434,12 +1454,31 @@ function RolesSettings() {
                   )}
                 </div>
                 {open && (
-                  <RolePermissions
-                    catalog={data.catalog}
-                    selected={role.permissions}
-                    disabled={role.locked || update.isPending}
-                    onChange={(permissions) => update.mutate({ id: role.id, permissions })}
-                  />
+                  <div className="flex flex-col gap-4">
+                    <form onSubmit={submitRename} className="flex flex-wrap items-center gap-2">
+                      <input
+                        className="input h-8 max-w-[16rem] flex-1"
+                        aria-label="Role name"
+                        value={draft}
+                        maxLength={40}
+                        required
+                        onChange={(e) => setDraft(e.target.value)}
+                      />
+                      <button
+                        type="submit"
+                        className="btn-quiet h-7 px-2.5"
+                        disabled={update.isPending || !draft.trim() || draft.trim() === role.name}
+                      >
+                        Rename
+                      </button>
+                    </form>
+                    <RolePermissions
+                      catalog={data.catalog}
+                      selected={role.permissions}
+                      disabled={role.locked || update.isPending}
+                      onChange={(permissions) => update.mutate({ id: role.id, permissions })}
+                    />
+                  </div>
                 )}
               </li>
             );

@@ -166,9 +166,11 @@ function loadFonts(): Promise<Font[]> {
   fontsPromise ??= Promise.all([
     Bun.file(new URL("../assets/Geist-Regular.ttf", import.meta.url)).arrayBuffer(),
     Bun.file(new URL("../assets/Geist-SemiBold.ttf", import.meta.url)).arrayBuffer(),
-  ]).then(([regular, semibold]) => [
+    Bun.file(new URL("../assets/NotoColorEmoji-Regular.ttf", import.meta.url)).arrayBuffer(),
+  ]).then(([regular, semibold, emoji]) => [
     { name: "Geist", data: regular, weight: 400 as const, style: "normal" as const },
     { name: "Geist", data: semibold, weight: 600 as const, style: "normal" as const },
+    { name: "Emoji", data: emoji, weight: 400 as const, style: "normal" as const },
   ]);
   return fontsPromise;
 }
