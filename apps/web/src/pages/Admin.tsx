@@ -104,6 +104,7 @@ function Sidebar({
   const { logout } = useAuth();
   const [, navigate] = useLocation();
   const total = counts ? Object.values(counts).reduce((a, b) => a + b, 0) : undefined;
+  const allActive = !dashboard && !settings && !filter.status;
 
   return (
     <aside className="hidden w-[16.5rem] shrink-0 flex-col p-3 md:flex">
@@ -129,12 +130,8 @@ function Sidebar({
         </SidebarLink>
 
         <Section title="The pile">
-          <SidebarLink
-            to={href({ board: filter.board })}
-            active={!dashboard && !settings && !filter.status}
-            count={total}
-          >
-            <Inbox className="text-faint" /> All
+          <SidebarLink to={href({ board: filter.board })} active={allActive} count={total}>
+            <Inbox className={allActive ? "text-accent" : "text-faint"} /> All
           </SidebarLink>
           {STATUSES.map((status) => {
             const n = counts?.[status] ?? 0;
@@ -172,7 +169,7 @@ function Sidebar({
             can(me, "manage_users") ||
             can(me, "manage_roles")) && (
             <SidebarLink to="/admin/settings" active={settings}>
-              <Gear className="text-faint" /> Settings
+              <Gear className={settings ? "text-accent" : "text-faint"} /> Settings
             </SidebarLink>
           )}
         </Section>
