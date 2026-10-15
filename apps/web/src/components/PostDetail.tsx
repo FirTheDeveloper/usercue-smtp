@@ -6,6 +6,7 @@ import {
   can,
   useAddComment,
   useAuthMethods,
+  useDeleteComment,
   useDeletePost,
   useMe,
   usePost,
@@ -448,7 +449,9 @@ function CommentNode({
   return (
     <li className="flex flex-col gap-3">
       <CommentItem
+        postId={postId}
         comment={comment}
+        hasReplies={replies.length > 0}
         active={open}
         onReply={() => onReply(open ? null : { id: comment.id, name: comment.authorName })}
       />
@@ -484,14 +487,22 @@ function CommentNode({
 }
 
 function CommentItem({
+  postId,
   comment,
+  hasReplies,
   active,
   onReply,
 }: {
+  postId: number;
   comment: Comment;
+  hasReplies: boolean;
   active: boolean;
   onReply: () => void;
 }) {
+  const { data: me } = useMe();
+  const remove = useDeleteComment(postId);
+  const staff = Boolean(me?.user?.staff && !me.user.suspended);
+
   return (
     <div className="flex gap-3">
       <Avatar
@@ -517,10 +528,26 @@ function CommentItem({
           >
             Reply
           </button>
+          {staff && (
+            <button
+              type="button"
+              className="rounded-full px-2 py-0.5 text-[12px] font-medium text-muted transition-colors hover:bg-hover hover:text-fg"
+              disabled={remove.isPending}
+              onClick={() => {
+                const message = hasReplies
+                  ? "Delete this comment and its replies?"
+                  : "Delete this comment?";
+                if (confirm(message)) remove.mutate(comment.id);
+              }}
+            >
+              Delete
+            </button>
+          )}
         </p>
         <div className="mt-1">
           <RichText html={comment.body} />
         </div>
+        <ErrorText error={remove.error} />
       </div>
     </div>
   );

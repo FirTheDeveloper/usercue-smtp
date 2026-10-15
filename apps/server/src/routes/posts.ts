@@ -44,6 +44,10 @@ const createComment = v.object({
 });
 
 const idParam = v.object({ id: numberParam(1, Number.MAX_SAFE_INTEGER) });
+const commentParam = v.object({
+  id: numberParam(1, Number.MAX_SAFE_INTEGER),
+  commentId: numberParam(1, Number.MAX_SAFE_INTEGER),
+});
 
 const POST_COLUMNS = `
   p.id, p.title, p.body, p.status,
@@ -146,6 +150,10 @@ const insertComment = db.query<CommentListRow>(
      CAST(NULL AS TEXT) AS author_role_perms`,
 );
 const bumpComments = db.query("UPDATE posts SET comment_count = comment_count + 1 WHERE id = ?");
+const deleteComment = db.query("DELETE FROM comments WHERE id = ? AND post_id = ?");
+const recountComments = db.query(
+  "UPDATE posts SET comment_count = (SELECT COUNT(*)::int FROM comments WHERE post_id = ?) WHERE id = ?",
+);
 const removePost = db.query("DELETE FROM posts WHERE id = ?");
 const hasVote = db.query<{ n: number }>(
   "SELECT COUNT(*)::int AS n FROM votes WHERE post_id = ? AND voter_id = ?",
@@ -192,6 +200,12 @@ const addComment = (
           author_role_perms: isTeam ? '["dashboard"]' : null,
         }
       : comment;
+  });
+
+const removeComment = (postId: number, commentId: number) =>
+  db.transaction(async () => {
+    await deleteComment.run(commentId, postId);
+    await recountComments.run(postId, postId);
   });
 
 function roleBadge(name: string | null, icon: string | null, permissions: string | null) {
@@ -461,6 +475,18 @@ export const posts = new Hono<AppEnv>()
       return c.json(serializeComment(row), 201);
     },
   )
+
+  .delete("/:id/comments/:commentId", vValidator("param", commentParam), async (c) => {
+    const user = c.get("user");
+    if (!user) return c.json({ error: "Unauthorized" }, 401);
+    if (user.suspended) return c.json({ error: "Your account has been suspended." }, 403);
+    if (!user.staff) return c.json({ error: "Forbidden" }, 403);
+    const { id, commentId } = c.req.valid("param");
+    const row = await findComment.get(commentId);
+    if (!row || row.post_id !== id) return c.json({ error: "Not found" }, 404);
+    await removeComment(id, commentId);
+    return c.json({ ok: true });
+  })
 
   .patch(
     "/:id",

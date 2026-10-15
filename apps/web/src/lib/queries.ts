@@ -111,6 +111,19 @@ export function useAddComment(postId: number) {
   });
 }
 
+export function useDeleteComment(postId: number) {
+  const invalidate = useInvalidatePosts();
+  return useMutation({
+    mutationFn: (commentId: number) =>
+      unwrap(
+        api.posts[":id"].comments[":commentId"].$delete({
+          param: { id: String(postId), commentId: String(commentId) },
+        }),
+      ),
+    onSuccess: invalidate,
+  });
+}
+
 export function useUpdatePost(id: number) {
   const invalidate = useInvalidatePosts();
   return useMutation({
