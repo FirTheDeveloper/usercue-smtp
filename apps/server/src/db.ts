@@ -389,6 +389,24 @@ const MIGRATE = `
     AND NOT EXISTS (
       SELECT 1 FROM status_changes sc WHERE sc.post_id = p.id AND sc.status = p.status
     );
+
+  DO $$
+  BEGIN
+    IF NOT EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_name = 'workspace' AND column_name = 'site_name'
+    ) THEN
+      UPDATE roles
+      SET permissions = (permissions::jsonb || '["manage_branding"]'::jsonb)::text
+      WHERE permissions::jsonb @> '["manage_settings"]'::jsonb
+        AND NOT permissions::jsonb @> '["manage_branding"]'::jsonb;
+    END IF;
+  END $$;
+
+  ALTER TABLE workspace ADD COLUMN IF NOT EXISTS site_name TEXT NOT NULL DEFAULT '';
+  ALTER TABLE workspace ADD COLUMN IF NOT EXISTS site_description TEXT NOT NULL DEFAULT '';
+  ALTER TABLE workspace ADD COLUMN IF NOT EXISTS favicon_url TEXT NOT NULL DEFAULT '';
+  ALTER TABLE workspace ADD COLUMN IF NOT EXISTS share_image_url TEXT NOT NULL DEFAULT '';
 `;
 
 function ident(name: string): string {

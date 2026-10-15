@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import type { AppEnv } from "../middleware";
 import { ogEntry, ogPost, renderEntryCard, renderPostCard } from "../og";
-import { changelogFlags, workspaceAccent } from "../workspace";
+import { changelogFlags, workspaceAccent, workspaceBranding } from "../workspace";
 
 function idFromFile(file: string): number | null {
   const match = /^(\d+)\.png$/.exec(file);
@@ -19,7 +19,11 @@ export const og = new Hono<AppEnv>()
     if (!id) return c.notFound();
     const post = await ogPost.get(id);
     if (!post) return c.notFound();
-    const png = await renderPostCard(post, await workspaceAccent());
+    const png = await renderPostCard(
+      post,
+      await workspaceAccent(),
+      (await workspaceBranding()).name,
+    );
     return new Response(png as unknown as BodyInit, { status: 200, headers });
   })
 
@@ -29,6 +33,10 @@ export const og = new Hono<AppEnv>()
     if (!(await changelogFlags()).enabled) return c.notFound();
     const entry = await ogEntry.get(id);
     if (!entry) return c.notFound();
-    const png = await renderEntryCard(entry, await workspaceAccent());
+    const png = await renderEntryCard(
+      entry,
+      await workspaceAccent(),
+      (await workspaceBranding()).name,
+    );
     return new Response(png as unknown as BodyInit, { status: 200, headers });
   });

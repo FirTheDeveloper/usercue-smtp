@@ -19,6 +19,7 @@ import {
   guestsAllowed,
   oauthOnly,
   workspaceAccent,
+  workspaceBranding,
   workspaceLogos,
 } from "../workspace";
 
@@ -74,6 +75,7 @@ export const auth = new Hono<AppEnv>()
   .get("/me", async (c) => {
     const user = c.get("user");
     const logos = await workspaceLogos();
+    const branding = await workspaceBranding();
     return c.json({
       user: user ? toPublicUser(user) : null,
       identity: c.get("identity"),
@@ -84,6 +86,8 @@ export const auth = new Hono<AppEnv>()
       accent: await workspaceAccent(),
       logoUrl: logos.light,
       logoDarkUrl: logos.dark,
+      siteName: branding.name,
+      faviconUrl: branding.faviconUrl,
     });
   })
 

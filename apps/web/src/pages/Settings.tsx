@@ -5,6 +5,8 @@ import {
   type AssignmentMode,
   isHexColor,
   type Permission,
+  SITE_DEFAULTS,
+  SITE_LIMITS,
   TAG_COLORS,
   type TagColor,
   tagColorHex,
@@ -31,6 +33,7 @@ import {
   useRemoveStaff,
   useRevokeInvite,
   useRoles,
+  useSaveBranding,
   useSaveProvider,
   useSaveSettings,
   useSettings,
@@ -44,6 +47,7 @@ import { AdminShell } from "./Admin";
 
 const TABS = [
   { id: "general", href: "/admin/settings", label: "General" },
+  { id: "branding", href: "/admin/settings/branding", label: "Branding" },
   { id: "tags", href: "/admin/settings/tags", label: "Tags" },
   { id: "auth", href: "/admin/settings/auth", label: "Authentication" },
   { id: "users", href: "/admin/settings/users", label: "Users" },
@@ -61,6 +65,7 @@ export function Settings() {
 
   const visible = TABS.filter((tab) => {
     if (tab.id === "general") return can(me, "manage_settings") || can(me, "manage_staff");
+    if (tab.id === "branding") return can(me, "manage_branding");
     if (tab.id === "tags") return can(me, "manage_posts") || can(me, "manage_settings");
     if (tab.id === "auth") return can(me, "manage_settings");
     if (tab.id === "users") return can(me, "manage_users");
@@ -103,6 +108,8 @@ export function Settings() {
           </header>
           {tab === "auth" ? (
             <AuthSettings />
+          ) : tab === "branding" ? (
+            <BrandingSettings />
           ) : tab === "tags" ? (
             <TagsSettings />
           ) : tab === "users" ? (
@@ -425,24 +432,25 @@ function assignmentHint(mode: AssignmentMode) {
   return "When a suggestion becomes Planned, the next staff member in line gets it.";
 }
 
-function LogoSlot({
+type BrandingImage = "logoUrl" | "logoDarkUrl" | "faviconUrl" | "shareImageUrl";
+
+function ImageSlot({
   label,
-  well,
   value,
   fallback,
   field,
+  preview,
 }: {
   label: string;
-  well: string;
   value: string | null | undefined;
-  fallback: string | null | undefined;
-  field: "logoUrl" | "logoDarkUrl";
+  fallback: string;
+  field: BrandingImage;
+  preview: (src: string) => ReactNode;
 }) {
-  const save = useSaveSettings();
+  const save = useSaveBranding();
   const input = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<Error | null>(null);
-  const src = value || fallback || "/usercue.svg";
 
   async function pick(file: File) {
     setBusy(true);
@@ -459,11 +467,7 @@ function LogoSlot({
 
   return (
     <div className="flex items-center gap-3">
-      <span
-        className={`inline-flex h-12 min-w-16 items-center justify-center rounded-xl px-3 ${well}`}
-      >
-        <img src={src} alt="" className="h-6 w-auto max-w-28 object-contain" />
-      </span>
+      {preview(value || fallback)}
       <div className="flex min-w-0 flex-1 flex-col gap-1">
         <span className="text-[12px] text-muted">{label}</span>
         <div className="flex items-center gap-2">
@@ -503,33 +507,201 @@ function LogoSlot({
   );
 }
 
-function LogoSettings() {
+function SectionHead({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <div>
+      <h2 className="text-[13px] font-medium">{title}</h2>
+      <p className="mt-1 text-[12px] text-muted">{children}</p>
+    </div>
+  );
+}
+
+function logoWell(well: string) {
+  return (src: string) => (
+    <span
+      className={`inline-flex h-12 min-w-16 items-center justify-center rounded-xl px-3 ${well}`}
+    >
+      <img src={src} alt="" className="h-6 w-auto max-w-28 object-contain" />
+    </span>
+  );
+}
+
+function SiteDetails() {
   const { data } = useSettings();
+  const save = useSaveBranding();
+  const [name, setName] = useState(data?.siteName ?? "");
+  const [description, setDescription] = useState(data?.siteDescription ?? "");
+  const [saved, setSaved] = useState(false);
+
+  function submit(e: FormEvent) {
+    e.preventDefault();
+    save.mutate(
+      { siteName: name, siteDescription: description },
+      {
+        onSuccess: () => {
+          setSaved(true);
+          window.setTimeout(() => setSaved(false), 2000);
+        },
+      },
+    );
+  }
 
   return (
-    <section className="flex flex-col gap-3">
-      <div>
-        <h2 className="text-[13px] font-medium">Logo</h2>
-        <p className="mt-1 text-[12px] text-muted">
+    <form onSubmit={submit} className="flex flex-col gap-3">
+      <SectionHead title="Name and description">
+        Shown in the browser tab, search results, and link previews. Leave them empty to use the
+        Usercue defaults.
+      </SectionHead>
+      <label className="flex flex-col gap-1.5">
+        <span className="px-1 text-[11px] text-muted">Name</span>
+        <input
+          className="input"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          maxLength={SITE_LIMITS.name}
+          placeholder={SITE_DEFAULTS.name}
+        />
+      </label>
+      <label className="flex flex-col gap-1.5">
+        <span className="px-1 text-[11px] text-muted">Description</span>
+        <textarea
+          className="input h-auto min-h-20 resize-none rounded-2xl py-2.5 leading-5"
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          maxLength={SITE_LIMITS.description}
+          placeholder={SITE_DEFAULTS.description}
+          rows={3}
+        />
+      </label>
+      <div className="flex items-center gap-2">
+        <ErrorText error={save.error} />
+        <div className="flex-1" />
+        <button type="submit" className="btn-primary" disabled={save.isPending}>
+          {saved && !save.error ? (
+            <>
+              <Check width={12} height={12} />
+              Saved
+            </>
+          ) : (
+            "Save"
+          )}
+        </button>
+      </div>
+    </form>
+  );
+}
+
+function BrandingSettings() {
+  const { data, isLoading } = useSettings();
+  const save = useSaveBranding();
+
+  if (isLoading || !data) return null;
+
+  const siteName = data.siteName || SITE_DEFAULTS.name;
+
+  return (
+    <div className="flex flex-col gap-10">
+      <SiteDetails />
+
+      <section className="flex flex-col gap-3">
+        <SectionHead title="Logo">
           The mark in the header, next to Feedback and Roadmap. Add one for light mode and one for
           dark. If dark is empty, the light image is used. PNG, JPEG, or SVG.
-        </p>
-      </div>
-      <LogoSlot
-        label="Light"
-        well="bg-[#fffaf3]"
-        value={data?.logoUrl}
-        fallback={data?.logoDarkUrl}
-        field="logoUrl"
-      />
-      <LogoSlot
-        label="Dark"
-        well="bg-[#080706]"
-        value={data?.logoDarkUrl}
-        fallback={data?.logoUrl}
-        field="logoDarkUrl"
-      />
-    </section>
+        </SectionHead>
+        <ImageSlot
+          label="Light"
+          value={data.logoUrl}
+          fallback={data.logoDarkUrl || "/usercue.svg"}
+          field="logoUrl"
+          preview={logoWell("bg-[#fffaf3]")}
+        />
+        <ImageSlot
+          label="Dark"
+          value={data.logoDarkUrl}
+          fallback={data.logoUrl || "/usercue.svg"}
+          field="logoDarkUrl"
+          preview={logoWell("bg-[#080706]")}
+        />
+      </section>
+
+      <section className="flex flex-col gap-3">
+        <SectionHead title="Browser icon">
+          The small icon in the browser tab and bookmarks. Use a square image. SVG or PNG works
+          best.
+        </SectionHead>
+        <ImageSlot
+          label="Icon"
+          value={data.faviconUrl}
+          fallback={SITE_DEFAULTS.faviconUrl}
+          field="faviconUrl"
+          preview={(src) => (
+            <span className="inline-flex h-12 w-40 items-center gap-2 rounded-xl bg-hover px-3">
+              <img src={src} alt="" className="size-4 shrink-0 object-contain" />
+              <span className="truncate text-[12px]">{siteName}</span>
+            </span>
+          )}
+        />
+      </section>
+
+      <section className="flex flex-col gap-3">
+        <SectionHead title="Link preview">
+          The image shown when someone shares a link to the board in chat or on social media. Posts
+          and changelog entries get their own card. 1200 by 630 works best.
+        </SectionHead>
+        <ImageSlot
+          label="Image"
+          value={data.shareImageUrl}
+          fallback={SITE_DEFAULTS.shareImageUrl}
+          field="shareImageUrl"
+          preview={(src) => (
+            <span className="inline-flex aspect-[1200/630] w-40 overflow-hidden rounded-xl bg-hover">
+              <img src={src} alt="" className="size-full object-cover" />
+            </span>
+          )}
+        />
+      </section>
+
+      <section className="flex flex-col gap-3">
+        <SectionHead title="Color">
+          The accent on buttons, links, and hearts. Pink is the Usercue default.
+        </SectionHead>
+        <div className="flex flex-wrap gap-2">
+          {ACCENTS.map((color) => {
+            const selected = data.accent === color.id;
+            return (
+              <button
+                key={color.id}
+                type="button"
+                aria-pressed={selected}
+                disabled={save.isPending}
+                onClick={() => save.mutate({ accent: color.id })}
+                className={`inline-flex h-8 items-center gap-2 rounded-full py-1 pr-3 pl-1.5 text-[13px] transition-colors ${
+                  selected
+                    ? "bg-surface font-medium text-fg shadow-(--shadow)"
+                    : "text-muted hover:bg-hover hover:text-fg"
+                }`}
+              >
+                <span
+                  className="size-5 rounded-full transition-shadow duration-500"
+                  style={{
+                    background: color.hex,
+                    boxShadow: selected
+                      ? `0 0 0 2px var(--surface), 0 0 0 3.5px ${color.hex}`
+                      : undefined,
+                  }}
+                />
+                {color.label}
+              </button>
+            );
+          })}
+        </div>
+        <CustomAccent
+          value={data.accent}
+          disabled={save.isPending}
+          onSelect={(accent) => save.mutate({ accent })}
+        />
+      </section>
+    </div>
   );
 }
 
@@ -570,54 +742,6 @@ function GeneralSettings() {
 
   return (
     <div className="flex flex-col gap-10">
-      {canSettings && <LogoSettings />}
-
-      {canSettings && (
-        <section className="flex flex-col gap-3">
-          <div>
-            <h2 className="text-[13px] font-medium">Color</h2>
-            <p className="mt-1 text-[12px] text-muted">
-              The accent on buttons, links, and hearts. Pink is the Usercue default.
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {ACCENTS.map((color) => {
-              const selected = data.accent === color.id;
-              return (
-                <button
-                  key={color.id}
-                  type="button"
-                  aria-pressed={selected}
-                  disabled={save.isPending}
-                  onClick={() => save.mutate({ accent: color.id })}
-                  className={`inline-flex h-8 items-center gap-2 rounded-full py-1 pr-3 pl-1.5 text-[13px] transition-colors ${
-                    selected
-                      ? "bg-surface font-medium text-fg shadow-(--shadow)"
-                      : "text-muted hover:bg-hover hover:text-fg"
-                  }`}
-                >
-                  <span
-                    className="size-5 rounded-full transition-shadow duration-500"
-                    style={{
-                      background: color.hex,
-                      boxShadow: selected
-                        ? `0 0 0 2px var(--surface), 0 0 0 3.5px ${color.hex}`
-                        : undefined,
-                    }}
-                  />
-                  {color.label}
-                </button>
-              );
-            })}
-          </div>
-          <CustomAccent
-            value={data.accent}
-            disabled={save.isPending}
-            onSelect={(accent) => save.mutate({ accent })}
-          />
-        </section>
-      )}
-
       {canSettings && (
         <section className="flex flex-col gap-3">
           <div>

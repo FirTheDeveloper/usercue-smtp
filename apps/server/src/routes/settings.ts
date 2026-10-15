@@ -6,6 +6,7 @@ import {
   PERMISSION_META,
   PERMISSIONS,
   type Permission,
+  SITE_LIMITS,
 } from "@usercue/shared";
 import { Hono } from "hono";
 import * as v from "valibot";
@@ -24,7 +25,13 @@ import {
   parsePermissions,
   staffRoleId,
 } from "../roles";
-import { getWorkspace, parseAccent, parseAssignmentMode, saveWorkspace } from "../workspace";
+import {
+  getWorkspace,
+  parseAccent,
+  parseAssignmentMode,
+  saveBranding,
+  saveWorkspace,
+} from "../workspace";
 
 const INVITE_TTL = 60 * 60 * 24 * 7;
 const countEnabledProviders = db.query<{ n: number }>(
@@ -196,6 +203,10 @@ async function snapshot(origin: string) {
     accent: parseAccent(workspace.accent),
     logoUrl: workspace.logo_url.trim() || null,
     logoDarkUrl: workspace.logo_dark_url.trim() || null,
+    siteName: workspace.site_name.trim() || null,
+    siteDescription: workspace.site_description.trim() || null,
+    faviconUrl: workspace.favicon_url.trim() || null,
+    shareImageUrl: workspace.share_image_url.trim() || null,
     resend: {
       configured: await resendConfigured(),
       enabled: await resendEnabled(),
@@ -249,6 +260,16 @@ const accentValue = v.pipe(
   ),
 );
 
+const uploadUrl = v.pipe(
+  v.string(),
+  v.trim(),
+  v.maxLength(200),
+  v.check(
+    (value) => !value || /^\/api\/uploads\/[A-Za-z0-9._-]+$/.test(value),
+    "Use an uploaded image.",
+  ),
+);
+
 export const settings = new Hono<AppEnv>()
   .get("/", requireTeam, async (c) => c.json(await snapshot(publicOrigin(c))))
 
@@ -263,9 +284,6 @@ export const settings = new Hono<AppEnv>()
         changelogComments: v.optional(v.boolean()),
         changelogReactions: v.optional(v.boolean()),
         assignmentMode: v.optional(v.picklist(ASSIGNMENT_MODES)),
-        accent: v.optional(accentValue),
-        logoUrl: v.optional(v.pipe(v.string(), v.trim(), v.maxLength(200))),
-        logoDarkUrl: v.optional(v.pipe(v.string(), v.trim(), v.maxLength(200))),
         resendEnabled: v.optional(v.boolean()),
         resendFrom: v.optional(v.pipe(v.string(), v.trim(), v.maxLength(200))),
         resendApiKey: v.optional(v.pipe(v.string(), v.trim(), v.maxLength(200))),
@@ -310,12 +328,30 @@ export const settings = new Hono<AppEnv>()
           );
         }
       }
-      const logoOk = (value: string | undefined) =>
-        !value || /^\/api\/uploads\/[A-Za-z0-9._-]+$/.test(value);
-      if (!logoOk(body.logoUrl) || !logoOk(body.logoDarkUrl)) {
-        return c.json({ error: "Use an uploaded image." }, 400);
-      }
       await saveWorkspace(body);
+      return c.json(await snapshot(publicOrigin(c)));
+    },
+  )
+
+  .patch(
+    "/branding",
+    requirePermission("manage_branding"),
+    vValidator(
+      "json",
+      v.object({
+        accent: v.optional(accentValue),
+        logoUrl: v.optional(uploadUrl),
+        logoDarkUrl: v.optional(uploadUrl),
+        faviconUrl: v.optional(uploadUrl),
+        shareImageUrl: v.optional(uploadUrl),
+        siteName: v.optional(v.pipe(v.string(), v.trim(), v.maxLength(SITE_LIMITS.name))),
+        siteDescription: v.optional(
+          v.pipe(v.string(), v.trim(), v.maxLength(SITE_LIMITS.description)),
+        ),
+      }),
+    ),
+    async (c) => {
+      await saveBranding(c.req.valid("json"));
       return c.json(await snapshot(publicOrigin(c)));
     },
   )

@@ -359,9 +359,6 @@ export function useSaveSettings() {
       changelogComments?: boolean;
       changelogReactions?: boolean;
       assignmentMode?: AssignmentMode;
-      accent?: string;
-      logoUrl?: string;
-      logoDarkUrl?: string;
       resendEnabled?: boolean;
       resendFrom?: string;
       resendApiKey?: string;
@@ -372,10 +369,29 @@ export function useSaveSettings() {
       oauthOnly?: boolean;
     }) => unwrap(api.settings.$patch({ json })),
     onSuccess: (data) => {
-      applyAccent(data.accent);
       qc.setQueryData(["settings"], data);
       qc.invalidateQueries({ queryKey: ["me"] });
       qc.invalidateQueries({ queryKey: ["auth-methods"] });
+    },
+  });
+}
+
+export function useSaveBranding() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (json: {
+      accent?: string;
+      logoUrl?: string;
+      logoDarkUrl?: string;
+      faviconUrl?: string;
+      shareImageUrl?: string;
+      siteName?: string;
+      siteDescription?: string;
+    }) => unwrap(api.settings.branding.$patch({ json })),
+    onSuccess: (data) => {
+      applyAccent(data.accent);
+      qc.setQueryData(["settings"], data);
+      return qc.invalidateQueries({ queryKey: ["me"] });
     },
   });
 }

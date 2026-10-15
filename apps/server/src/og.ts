@@ -2,8 +2,8 @@ import { Resvg } from "@resvg/resvg-js";
 import { ACCENTS, isHexColor, STATUS_LABELS, type Status, stripHtml } from "@usercue/shared";
 import satori from "satori";
 import { db } from "./db";
+import type { Branding } from "./workspace";
 
-const SITE = "Usercue";
 const DESCRIPTION_LIMIT = 200;
 const DEFAULT_ACCENT = "#ff2b87";
 
@@ -68,11 +68,18 @@ export const ogEntry = db.query<OgEntry>(
 );
 
 interface Meta {
+  site: string;
+  type: "website" | "article";
   title: string;
   description: string;
   url: string;
   image: string;
+  favicon: string;
   publishedTime?: number;
+}
+
+function absolute(origin: string, url: string): string {
+  return url.startsWith("/") ? `${origin}${url}` : url;
 }
 
 export function metaTags(meta: Meta): string {
@@ -80,8 +87,9 @@ export function metaTags(meta: Meta): string {
     `<title>${escapeHtml(meta.title)}</title>`,
     `<meta name="description" content="${escapeHtml(meta.description)}" />`,
     `<link rel="canonical" href="${escapeHtml(meta.url)}" />`,
-    `<meta property="og:site_name" content="${SITE}" />`,
-    `<meta property="og:type" content="article" />`,
+    `<link rel="icon" href="${escapeHtml(meta.favicon)}" />`,
+    `<meta property="og:site_name" content="${escapeHtml(meta.site)}" />`,
+    `<meta property="og:type" content="${meta.type}" />`,
     `<meta property="og:title" content="${escapeHtml(meta.title)}" />`,
     `<meta property="og:description" content="${escapeHtml(meta.description)}" />`,
     `<meta property="og:url" content="${escapeHtml(meta.url)}" />`,
@@ -101,9 +109,24 @@ export function metaTags(meta: Meta): string {
   return tags.join("\n    ");
 }
 
-export function postMeta(origin: string, post: OgPost): Meta {
+export function siteMeta(origin: string, path: string, branding: Branding): Meta {
   return {
-    title: `${post.title} · ${SITE}`,
+    site: branding.name,
+    type: "website",
+    title: branding.name,
+    description: branding.description,
+    url: `${origin}${path}`,
+    image: absolute(origin, branding.shareImageUrl),
+    favicon: branding.faviconUrl,
+  };
+}
+
+export function postMeta(origin: string, post: OgPost, branding: Branding): Meta {
+  return {
+    site: branding.name,
+    type: "article",
+    favicon: branding.faviconUrl,
+    title: `${post.title} · ${branding.name}`,
     description: excerpt(post.body, `${STATUS_LABELS[post.status]} · ${post.board_name}`),
     url: `${origin}/post/${post.id}`,
     image: `${origin}/api/og/post/${post.id}.png`,
@@ -111,10 +134,13 @@ export function postMeta(origin: string, post: OgPost): Meta {
   };
 }
 
-export function entryMeta(origin: string, entry: OgEntry): Meta {
+export function entryMeta(origin: string, entry: OgEntry, branding: Branding): Meta {
   return {
-    title: `${entry.title} · ${SITE}`,
-    description: excerpt(entry.body, `${SITE} changelog`),
+    site: branding.name,
+    type: "article",
+    favicon: branding.faviconUrl,
+    title: `${entry.title} · ${branding.name}`,
+    description: excerpt(entry.body, `${branding.name} changelog`),
     url: `${origin}/changelog/${entry.id}`,
     image: `${origin}/api/og/changelog/${entry.id}.png`,
     publishedTime: entry.created_at,
@@ -125,7 +151,7 @@ export function injectMeta(base: string, tags: string): string {
   const cleaned = base
     .replace(/<title>[\s\S]*?<\/title>\s*/i, "")
     .replace(/<meta[^>]+(?:property|name)="(?:og:|twitter:|description)[^"]*"[^>]*>\s*/gi, "")
-    .replace(/<link[^>]+rel="canonical"[^>]*>\s*/i, "");
+    .replace(/<link[^>]+rel="(?:canonical|icon)"[^>]*>\s*/gi, "");
   if (cleaned.includes("</head>")) {
     return cleaned.replace("</head>", `  ${tags}\n  </head>`);
   }
@@ -148,6 +174,7 @@ function loadFonts(): Promise<Font[]> {
 }
 
 function card(options: {
+  site: string;
   accent: string;
   chip: string;
   meta: string;
@@ -217,7 +244,7 @@ function card(options: {
             borderRadius: 9,
             backgroundColor: accent,
           }),
-          text(SITE, { display: "flex", fontSize: 32, fontWeight: 600 }),
+          text(options.site, { display: "flex", fontSize: 32, fontWeight: 600 }),
         ]),
       ]),
     ],
@@ -255,11 +282,12 @@ function cached(key: string, make: () => Promise<Uint8Array>): Promise<Uint8Arra
   });
 }
 
-export function renderPostCard(post: OgPost, accent: string): Promise<Uint8Array> {
-  const key = `post:${post.id}:${post.status}:${post.title.length}:${hash(post.body)}`;
+export function renderPostCard(post: OgPost, accent: string, site: string): Promise<Uint8Array> {
+  const key = `post:${post.id}:${post.status}:${post.title.length}:${hash(post.body)}:${accent}:${hash(site)}`;
   return cached(key, () =>
     rasterize(
       card({
+        site,
         accent,
         chip: STATUS_LABELS[post.status],
         meta: post.board_name,
@@ -271,14 +299,15 @@ export function renderPostCard(post: OgPost, accent: string): Promise<Uint8Array
   );
 }
 
-export function renderEntryCard(entry: OgEntry, accent: string): Promise<Uint8Array> {
-  const key = `entry:${entry.id}:${entry.updated_at}:${entry.title.length}`;
+export function renderEntryCard(entry: OgEntry, accent: string, site: string): Promise<Uint8Array> {
+  const key = `entry:${entry.id}:${entry.updated_at}:${entry.title.length}:${accent}:${hash(site)}`;
   return cached(key, () =>
     rasterize(
       card({
+        site,
         accent,
         chip: "Changelog",
-        meta: SITE,
+        meta: site,
         title: entry.title,
         body: excerpt(entry.body, ""),
       }),

@@ -1,5 +1,5 @@
 import type { AssignmentMode } from "@usercue/shared";
-import { ACCENT_IDS, ASSIGNMENT_MODES, isHexColor } from "@usercue/shared";
+import { ACCENT_IDS, ASSIGNMENT_MODES, isHexColor, SITE_DEFAULTS } from "@usercue/shared";
 import { db } from "./db";
 import { encryptSecret, hashSecret } from "./secret";
 
@@ -25,6 +25,17 @@ export interface WorkspaceRow {
   teams_webhook_cipher: string;
   teams_webhook_hash: string;
   oauth_only: number;
+  site_name: string;
+  site_description: string;
+  favicon_url: string;
+  share_image_url: string;
+}
+
+export interface Branding {
+  name: string;
+  description: string;
+  faviconUrl: string;
+  shareImageUrl: string;
 }
 
 export interface StaffAssignee {
@@ -42,9 +53,6 @@ const update = db.query(
      resend_key_cipher = ?,
      resend_key_hash = ?,
      assignment_mode = ?,
-     accent = ?,
-     logo_url = ?,
-     logo_dark_url = ?,
      changelog_enabled = ?,
      changelog_comments = ?,
      changelog_reactions = ?,
@@ -55,6 +63,17 @@ const update = db.query(
      teams_webhook_cipher = ?,
      teams_webhook_hash = ?,
      oauth_only = ?
+   WHERE id = 1`,
+);
+const updateBranding = db.query(
+  `UPDATE workspace SET
+     accent = ?,
+     logo_url = ?,
+     logo_dark_url = ?,
+     site_name = ?,
+     site_description = ?,
+     favicon_url = ?,
+     share_image_url = ?
    WHERE id = 1`,
 );
 const setCursor = db.query("UPDATE workspace SET assignment_cursor = ? WHERE id = 1");
@@ -88,6 +107,10 @@ const empty: WorkspaceRow = {
   teams_webhook_cipher: "",
   teams_webhook_hash: "",
   oauth_only: 0,
+  site_name: "",
+  site_description: "",
+  favicon_url: "",
+  share_image_url: "",
 };
 
 export function parseAssignmentMode(value: string | null | undefined): AssignmentMode {
@@ -114,9 +137,6 @@ export async function saveWorkspace(patch: {
   resendFrom?: string;
   resendApiKey?: string;
   assignmentMode?: AssignmentMode;
-  accent?: string;
-  logoUrl?: string;
-  logoDarkUrl?: string;
   changelogEnabled?: boolean;
   changelogComments?: boolean;
   changelogReactions?: boolean;
@@ -146,11 +166,6 @@ export async function saveWorkspace(patch: {
     patch.assignmentMode === undefined
       ? parseAssignmentMode(current.assignment_mode)
       : patch.assignmentMode;
-  const accent =
-    patch.accent === undefined ? parseAccent(current.accent) : parseAccent(patch.accent);
-  const logo = patch.logoUrl === undefined ? current.logo_url : patch.logoUrl.trim();
-  const logoDark =
-    patch.logoDarkUrl === undefined ? current.logo_dark_url : patch.logoDarkUrl.trim();
   const flag = (value: boolean | undefined, current: number) =>
     value === undefined ? current : value ? 1 : 0;
   const changelog = flag(patch.changelogEnabled, current.changelog_enabled);
@@ -180,9 +195,6 @@ export async function saveWorkspace(patch: {
     cipher,
     hash,
     mode,
-    accent,
-    logo,
-    logoDark,
     changelog,
     changelogComments,
     changelogReactions,
@@ -195,6 +207,40 @@ export async function saveWorkspace(patch: {
     oauth,
   );
   return getWorkspace();
+}
+
+export async function saveBranding(patch: {
+  accent?: string;
+  logoUrl?: string;
+  logoDarkUrl?: string;
+  siteName?: string;
+  siteDescription?: string;
+  faviconUrl?: string;
+  shareImageUrl?: string;
+}) {
+  const current = await getWorkspace();
+  const text = (value: string | undefined, fallback: string) =>
+    value === undefined ? fallback : value.trim();
+  await updateBranding.run(
+    patch.accent === undefined ? parseAccent(current.accent) : parseAccent(patch.accent),
+    text(patch.logoUrl, current.logo_url),
+    text(patch.logoDarkUrl, current.logo_dark_url),
+    text(patch.siteName, current.site_name),
+    text(patch.siteDescription, current.site_description),
+    text(patch.faviconUrl, current.favicon_url),
+    text(patch.shareImageUrl, current.share_image_url),
+  );
+  return getWorkspace();
+}
+
+export async function workspaceBranding(): Promise<Branding> {
+  const row = await getWorkspace();
+  return {
+    name: row.site_name.trim() || SITE_DEFAULTS.name,
+    description: row.site_description.trim() || SITE_DEFAULTS.description,
+    faviconUrl: row.favicon_url.trim() || SITE_DEFAULTS.faviconUrl,
+    shareImageUrl: row.share_image_url.trim() || SITE_DEFAULTS.shareImageUrl,
+  };
 }
 
 export async function oauthOnly() {

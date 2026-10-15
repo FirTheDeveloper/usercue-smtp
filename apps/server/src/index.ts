@@ -1,12 +1,13 @@
 import { relative } from "node:path";
+import type { Context } from "hono";
 import { serveStatic } from "hono/bun";
 import { app } from "./app";
 import { initDb } from "./db";
 import { env } from "./env";
 import { publicOrigin } from "./oauth";
-import { entryMeta, injectMeta, metaTags, ogEntry, ogPost, postMeta } from "./og";
+import { entryMeta, injectMeta, metaTags, ogEntry, ogPost, postMeta, siteMeta } from "./og";
 import { initRoles } from "./roles";
-import { changelogFlags } from "./workspace";
+import { changelogFlags, workspaceBranding } from "./workspace";
 
 await initDb();
 await initRoles();
@@ -24,12 +25,19 @@ if (env.production) {
 
   app.all("/api/*", (c) => c.json({ error: "Not found" }, 404));
 
+  const page = async (c: Context) => {
+    const tags = metaTags(siteMeta(publicOrigin(c), c.req.path, await workspaceBranding()));
+    return c.html(injectMeta(await shell(), tags), 200, { "Cache-Control": "no-cache" });
+  };
+
+  app.get("/", page);
+
   app.get("/post/:id", async (c) => {
     const base = await shell();
     const id = Number(c.req.param("id"));
     const post = Number.isInteger(id) ? await ogPost.get(id) : null;
-    if (!post) return c.html(base);
-    const tags = metaTags(postMeta(publicOrigin(c), post));
+    if (!post) return page(c);
+    const tags = metaTags(postMeta(publicOrigin(c), post, await workspaceBranding()));
     return c.html(injectMeta(base, tags), 200, { "Cache-Control": "public, max-age=60" });
   });
 
@@ -37,13 +45,13 @@ if (env.production) {
     const base = await shell();
     const id = Number(c.req.param("id"));
     const entry = Number.isInteger(id) ? await ogEntry.get(id) : null;
-    if (!entry || !(await changelogFlags()).enabled) return c.html(base);
-    const tags = metaTags(entryMeta(publicOrigin(c), entry));
+    if (!entry || !(await changelogFlags()).enabled) return page(c);
+    const tags = metaTags(entryMeta(publicOrigin(c), entry, await workspaceBranding()));
     return c.html(injectMeta(base, tags), 200, { "Cache-Control": "public, max-age=60" });
   });
 
   app.use("*", serveStatic({ root, precompressed: true }));
-  app.get("*", serveStatic({ root, path: "index.html", precompressed: true }));
+  app.get("*", page);
 }
 
 if (env.production) {

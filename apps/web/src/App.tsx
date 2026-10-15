@@ -3,6 +3,7 @@ import { Redirect, Route, Switch } from "wouter";
 import { PublicLayout } from "./components/PublicLayout";
 import { applyAccent } from "./lib/accent";
 import { useMe } from "./lib/queries";
+import { applySite } from "./lib/site";
 import { Account } from "./pages/Account";
 import { Admin } from "./pages/Admin";
 import { AuthPage } from "./pages/Auth";
@@ -23,6 +24,9 @@ export function App() {
   useEffect(() => {
     if (me?.accent) applyAccent(me.accent);
   }, [me?.accent]);
+  useEffect(() => {
+    if (me?.siteName && me.faviconUrl) applySite(me.siteName, me.faviconUrl);
+  }, [me?.siteName, me?.faviconUrl]);
   if (isLoading) {
     return <div className="min-h-dvh bg-bg" aria-busy="true" />;
   }

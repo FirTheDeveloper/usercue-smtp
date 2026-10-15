@@ -106,6 +106,7 @@ export const PERMISSIONS = [
   "manage_posts",
   "manage_boards",
   "manage_settings",
+  "manage_branding",
   "manage_users",
   "manage_roles",
   "manage_staff",
@@ -129,6 +130,10 @@ export const PERMISSION_META: Record<Permission, { label: string; description: s
     label: "Workspace settings",
     description: "Change general and authentication settings.",
   },
+  manage_branding: {
+    label: "Branding",
+    description: "Change the workspace name, description, icons, logo, and color.",
+  },
   manage_users: {
     label: "Manage users",
     description: "View, suspend, and delete registered accounts.",
@@ -142,6 +147,16 @@ export const PERMISSION_META: Record<Permission, { label: string; description: s
     description: "Invite people to the workspace and remove staff.",
   },
 };
+
+export const SITE_DEFAULTS = {
+  name: "Usercue",
+  description:
+    "Collect feedback, prioritize with your team, and keep customers in the loop from one place.",
+  faviconUrl: "/usercue.svg",
+  shareImageUrl: "/og.png",
+} as const;
+
+export const SITE_LIMITS = { name: 60, description: 200 } as const;
 
 export const AUTH_PROVIDERS = ["github", "discord", "google", "roblox", "azure"] as const;
 export type AuthProviderId = (typeof AUTH_PROVIDERS)[number];
