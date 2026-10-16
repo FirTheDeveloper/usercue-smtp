@@ -1,4 +1,10 @@
-import { LIMITS, STATUS_LABELS, STATUSES, type Status, tagColorHex } from "@usercue/shared";
+import {
+  LIMITS,
+  STATUS_LABELS,
+  STATUSES,
+  type Status,
+  tagColorHex,
+} from "@usercue/shared";
 import { type FormEvent, useEffect, useRef, useState } from "react";
 import type { Comment } from "../lib/api";
 import { getSavedName, saveName, timeAgo } from "../lib/format";
@@ -54,12 +60,21 @@ export function PostDetail({ id, onDeleted }: PostDetailProps) {
       <div className="flex min-w-0 flex-1 flex-col gap-6">
         <header className="flex items-start gap-4">
           <div className="min-w-0 flex-1">
-            <h1 className="text-[22px] leading-7 font-semibold tracking-tight">{post.title}</h1>
+            <h1 className="text-[22px] leading-7 font-semibold tracking-tight">
+              {post.title}
+            </h1>
             <p className="mt-3 flex items-center gap-2 text-[13px] text-muted">
-              <Avatar name={post.authorName} src={post.authorAvatar} size="sm" />
+              <Avatar
+                name={post.authorName}
+                src={post.authorAvatar}
+                size="sm"
+              />
               <span className="text-fg">{post.authorName}</span>
               {post.authorRole && (
-                <RoleBadge name={post.authorRole.name} iconUrl={post.authorRole.iconUrl} />
+                <RoleBadge
+                  name={post.authorRole.name}
+                  iconUrl={post.authorRole.iconUrl}
+                />
               )}
               <span className="text-faint">·</span>
               <span>{timeAgo(post.createdAt)}</span>
@@ -109,7 +124,9 @@ export function PostDetail({ id, onDeleted }: PostDetailProps) {
         <section className="flex flex-col gap-5 border-t pt-6">
           <h2 className="text-[13px] font-medium">
             Comments
-            <span className="ml-2 text-faint tabular-nums">{post.comments.length}</span>
+            <span className="ml-2 text-faint tabular-nums">
+              {post.comments.length}
+            </span>
           </h2>
 
           <CommentThread postId={id} comments={post.comments} />
@@ -180,7 +197,9 @@ function StatusRoad({ current }: { current: Status }) {
 }
 
 function ActivityLog({ history }: { history: StatusStop[] }) {
-  const events = history.filter((item, i) => !(i === 0 && item.status === "open"));
+  const events = history.filter(
+    (item, i) => !(i === 0 && item.status === "open"),
+  );
   if (events.length === 0) return null;
 
   return (
@@ -210,13 +229,29 @@ function StopHeart({
   const color = STATUS_INK[status];
   if (active) {
     return (
-      <span className={`relative flex size-5 items-center justify-center ${color}`}>
-        <Heart className="animate-stop" width={14} height={14} fill="currentColor" stroke="none" />
+      <span
+        className={`relative flex size-5 items-center justify-center ${color}`}
+      >
+        <Heart
+          className="animate-stop"
+          width={14}
+          height={14}
+          fill="currentColor"
+          stroke="none"
+        />
       </span>
     );
   }
   if (reached) {
-    return <Heart className={color} width={14} height={14} fill="currentColor" stroke="none" />;
+    return (
+      <Heart
+        className={color}
+        width={14}
+        height={14}
+        fill="currentColor"
+        stroke="none"
+      />
+    );
   }
   return <Heart className={`${color} opacity-40`} width={14} height={14} />;
 }
@@ -257,7 +292,7 @@ function AssigneeControl({
     <span>Unassigned</span>
   );
 
-  if (mode !== "manual" || !canTriage) {
+  if (mode === "off" || !canTriage) {
     return <span className="chip text-muted">{label}</span>;
   }
 
@@ -297,7 +332,9 @@ function AssigneeControl({
               }}
             >
               <Avatar name={person.name} src={person.avatarUrl} size="xs" />
-              <span className="min-w-0 flex-1 truncate text-left">{person.name}</span>
+              <span className="min-w-0 flex-1 truncate text-left">
+                {person.name}
+              </span>
               {assignee?.id === person.id && <Check width={12} height={12} />}
             </button>
           ))}
@@ -343,7 +380,11 @@ function PostActions({
       <StatusBadge status={status} />
       <span className="text-xs text-faint">{boardName}</span>
       <ShareButton url={`${window.location.origin}/post/${postId}`} />
-      <AssigneeControl assignee={assignee} canTriage={canTriage} onAssign={onAssign} />
+      <AssigneeControl
+        assignee={assignee}
+        canTriage={canTriage}
+        onAssign={onAssign}
+      />
       {canTriage && (
         <div className="relative" ref={ref}>
           <button
@@ -369,8 +410,12 @@ function PostActions({
                     setOpen(false);
                   }}
                 >
-                  <span className={`size-1.5 rounded-full ${STATUS_DOT[item]}`} />
-                  <span className="flex-1 text-left">{STATUS_LABELS[item]}</span>
+                  <span
+                    className={`size-1.5 rounded-full ${STATUS_DOT[item]}`}
+                  />
+                  <span className="flex-1 text-left">
+                    {STATUS_LABELS[item]}
+                  </span>
                   {item === status && <Check width={12} height={12} />}
                 </button>
               ))}
@@ -399,9 +444,17 @@ function byTime(a: Comment, b: Comment) {
   return Number(a.createdAt) - Number(b.createdAt) || a.id - b.id;
 }
 
-function CommentThread({ postId, comments }: { postId: number; comments: Comment[] }) {
+function CommentThread({
+  postId,
+  comments,
+}: {
+  postId: number;
+  comments: Comment[];
+}) {
   const [reply, setReply] = useState<{ id: number; name: string } | null>(null);
-  const roots = comments.filter((comment) => comment.parentId == null).sort(byTime);
+  const roots = comments
+    .filter((comment) => comment.parentId == null)
+    .sort(byTime);
 
   return (
     <>
@@ -443,7 +496,9 @@ function CommentNode({
   reply: { id: number; name: string } | null;
   onReply: (reply: { id: number; name: string } | null) => void;
 }) {
-  const replies = comments.filter((item) => item.parentId === comment.id).sort(byTime);
+  const replies = comments
+    .filter((item) => item.parentId === comment.id)
+    .sort(byTime);
   const open = reply?.id === comment.id;
 
   return (
@@ -453,7 +508,9 @@ function CommentNode({
         comment={comment}
         hasReplies={replies.length > 0}
         active={open}
-        onReply={() => onReply(open ? null : { id: comment.id, name: comment.authorName })}
+        onReply={() =>
+          onReply(open ? null : { id: comment.id, name: comment.authorName })
+        }
       />
       {open && reply && (
         <CommentForm
@@ -515,14 +572,21 @@ function CommentItem({
         <p className="flex flex-wrap items-center gap-x-2 gap-y-1">
           <span className="text-[13px] font-medium">{comment.authorName}</span>
           {comment.authorRole && (
-            <RoleBadge name={comment.authorRole.name} iconUrl={comment.authorRole.iconUrl} />
+            <RoleBadge
+              name={comment.authorRole.name}
+              iconUrl={comment.authorRole.iconUrl}
+            />
           )}
-          <span className="text-[12px] text-faint">{timeAgo(comment.createdAt)}</span>
+          <span className="text-[12px] text-faint">
+            {timeAgo(comment.createdAt)}
+          </span>
           <button
             type="button"
             aria-expanded={active}
             className={`rounded-full px-2 py-0.5 text-[12px] font-medium transition-colors ${
-              active ? "bg-accent-soft text-accent-text" : "bg-hover text-fg hover:bg-line"
+              active
+                ? "bg-accent-soft text-accent-text"
+                : "bg-hover text-fg hover:bg-line"
             }`}
             onClick={onReply}
           >
@@ -579,7 +643,9 @@ function PostTags({
 
   function toggle(tagId: number) {
     const ids = tags.map((tag) => tag.id);
-    onChange(ids.includes(tagId) ? ids.filter((id) => id !== tagId) : [...ids, tagId]);
+    onChange(
+      ids.includes(tagId) ? ids.filter((id) => id !== tagId) : [...ids, tagId],
+    );
   }
 
   return (
@@ -600,7 +666,10 @@ function PostTags({
             Tag
           </button>
           {open && (
-            <div role="menu" className="menu absolute top-full left-0 z-30 mt-1.5 w-52">
+            <div
+              role="menu"
+              className="menu absolute top-full left-0 z-30 mt-1.5 w-52"
+            >
               {allTags.length === 0 ? (
                 <p className="px-3 py-2.5 text-[12px] leading-5 text-muted">
                   No tags yet. Add them in Settings.
@@ -623,7 +692,9 @@ function PostTags({
                         className="size-2 shrink-0 rounded-full"
                         style={{ background: tagColorHex(tag.color) }}
                       />
-                      <span className="min-w-0 flex-1 truncate">{tag.name}</span>
+                      <span className="min-w-0 flex-1 truncate">
+                        {tag.name}
+                      </span>
                       {selected && <Check width={12} height={12} />}
                     </button>
                   );
@@ -700,7 +771,9 @@ function CommentForm({
           {methods?.providers.length ? (
             <OAuthButtons next="board" />
           ) : (
-            <p className="text-[12px] text-muted">Sign in is required to comment.</p>
+            <p className="text-[12px] text-muted">
+              Sign in is required to comment.
+            </p>
           )}
         </div>
       )}
@@ -717,15 +790,27 @@ function CommentForm({
         )}
         {(user || identity) && (
           <span className="inline-flex items-center gap-1.5 px-1 text-[13px] text-muted">
-            <Avatar name={user?.name ?? identity?.name ?? ""} src={user?.avatarUrl} size="xs" />
+            <Avatar
+              name={user?.name ?? identity?.name ?? ""}
+              src={user?.avatarUrl}
+              size="xs"
+            />
             {user?.name ?? identity?.name}
           </span>
         )}
         <div className="flex-1" />
-        {suspended && <p className="text-xs text-rose-500">Your account has been suspended.</p>}
+        {suspended && (
+          <p className="text-xs text-rose-500">
+            Your account has been suspended.
+          </p>
+        )}
         <ErrorText error={add.error} />
         {onCancel && (
-          <button type="button" className="btn-quiet h-7 px-2.5" onClick={onCancel}>
+          <button
+            type="button"
+            className="btn-quiet h-7 px-2.5"
+            onClick={onCancel}
+          >
             Cancel
           </button>
         )}
