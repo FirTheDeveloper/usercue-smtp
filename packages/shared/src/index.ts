@@ -99,7 +99,7 @@ export const LIMITS = {
   imageBytes: 1_500_000,
 } as const;
 
-export { isEmptyHtml, isPostHref, sanitizeHtml, stripHtml } from "./html";
+export { IMAGE_WIDTH, isEmptyHtml, isPostHref, sanitizeHtml, stripHtml } from "./html";
 
 export const PERMISSIONS = [
   "dashboard",

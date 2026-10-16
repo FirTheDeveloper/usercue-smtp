@@ -1,5 +1,12 @@
-import { isEmptyHtml, isPostHref, LIMITS, sanitizeHtml } from "@usercue/shared";
-import { type ReactNode, useEffect, useRef, useState } from "react";
+import { IMAGE_WIDTH, isEmptyHtml, isPostHref, LIMITS, sanitizeHtml } from "@usercue/shared";
+import {
+  type PointerEvent,
+  type ReactNode,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import { uploadImage } from "../lib/api";
 import { usePosts } from "../lib/queries";
 import {
@@ -25,6 +32,13 @@ interface EditorProps {
   headings?: boolean;
   excludeId?: number;
   autoFocus?: boolean;
+}
+
+interface ImageFrame {
+  top: number;
+  left: number;
+  width: number;
+  height: number;
 }
 
 function exec(command: string, value?: string) {
@@ -111,10 +125,10 @@ function inlineMarkdown(text: string) {
       const html = rule.render(args.slice(0, -2) as RegExpMatchArray);
       if (!html) return args[0];
       held.push(html);
-      return `${held.length - 1}`;
+      return `\uE000${held.length - 1}\uE001`;
     });
   }
-  return out.replace(/(\d+)/g, (_, i) => held[Number(i)] ?? "");
+  return out.replace(/\uE000(\d+)\uE001/g, (_, i) => held[Number(i)] ?? "");
 }
 
 const MARKDOWN_HINT = new RegExp(
@@ -198,6 +212,10 @@ export function Editor({
   const file = useRef<HTMLInputElement>(null);
   const saved = useRef<Range | null>(null);
   const formatted = useRef<Element | null>(null);
+  const box = useRef<HTMLDivElement>(null);
+  const [picked, setPicked] = useState<HTMLImageElement | null>(null);
+  const [frame, setFrame] = useState<ImageFrame | null>(null);
+  const [dragWidth, setDragWidth] = useState<number | null>(null);
   const [linking, setLinking] = useState(false);
   const [href, setHref] = useState("https://");
   const [busy, setBusy] = useState(false);
@@ -239,6 +257,67 @@ export function Editor({
     return () => el.removeEventListener("beforeinput", onBeforeInput);
   }, []);
 
+  useLayoutEffect(() => {
+    const img = picked;
+    const outer = box.current;
+    if (!img || !outer) {
+      setFrame(null);
+      return;
+    }
+    const place = () => {
+      if (!img.isConnected) {
+        setPicked(null);
+        return;
+      }
+      const from = outer.getBoundingClientRect();
+      const rect = img.getBoundingClientRect();
+      setFrame({
+        top: rect.top - from.top,
+        left: rect.left - from.left,
+        width: rect.width,
+        height: rect.height,
+      });
+    };
+    place();
+    const observer = new ResizeObserver(place);
+    observer.observe(img);
+    observer.observe(outer);
+    window.addEventListener("resize", place);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", place);
+    };
+  }, [picked]);
+
+  function resizeImage(e: PointerEvent<HTMLButtonElement>) {
+    const img = picked;
+    const el = root.current;
+    if (!img || !el) return;
+    e.preventDefault();
+    const handle = e.currentTarget;
+    handle.setPointerCapture(e.pointerId);
+    const startX = e.clientX;
+    const startWidth = img.getBoundingClientRect().width;
+    const limit = Math.min(IMAGE_WIDTH.max, el.clientWidth);
+    const move = (next: globalThis.PointerEvent) => {
+      const width = Math.round(
+        Math.min(limit, Math.max(IMAGE_WIDTH.min, startWidth + next.clientX - startX)),
+      );
+      img.setAttribute("width", String(width));
+      setDragWidth(width);
+    };
+    const end = () => {
+      handle.removeEventListener("pointermove", move);
+      handle.removeEventListener("pointerup", end);
+      handle.removeEventListener("pointercancel", end);
+      setDragWidth(null);
+      emit();
+    };
+    handle.addEventListener("pointermove", move);
+    handle.addEventListener("pointerup", end);
+    handle.addEventListener("pointercancel", end);
+  }
+
   function emit() {
     const el = root.current;
     const html = sanitizeHtml(el?.innerHTML ?? "");
@@ -276,7 +355,7 @@ export function Editor({
     const node = startContainer as Text;
 
     if (input.data === " ") {
-      const line = lineBefore(el, node, end).replace(/ /g, " ");
+      const line = lineBefore(el, node, end).replace(/\u00a0/g, " ");
       if (line.length > end) return;
       let command: [string, string?] | null = null;
       if (/^[-*+] $/.test(line)) command = ["insertUnorderedList"];
@@ -355,7 +434,7 @@ export function Editor({
   }
 
   return (
-    <div className="relative flex flex-col gap-2">
+    <div ref={box} className="relative flex flex-col gap-2">
       <div className="flex flex-wrap items-center gap-0.5">
         {headings && (
           <Tool
@@ -497,7 +576,21 @@ export function Editor({
           exec("insertHTML", markdownToHtml(text, headings));
           emit();
         }}
+        onClick={(e) => {
+          const target = e.target;
+          if (!(target instanceof HTMLImageElement)) {
+            setPicked(null);
+            return;
+          }
+          const range = document.createRange();
+          range.selectNode(target);
+          window.getSelection()?.removeAllRanges();
+          window.getSelection()?.addRange(range);
+          setPicked(target);
+        }}
+        onBlur={() => setPicked(null)}
         onKeyDown={(e) => {
+          setPicked(null);
           if (e.key === "Escape" && mention) {
             e.preventDefault();
             setMention(null);
@@ -525,6 +618,27 @@ export function Editor({
           }
         }}
       />
+      {picked && frame && (
+        <div className="pointer-events-none absolute rounded-xl ring-2 ring-accent" style={frame}>
+          <button
+            type="button"
+            aria-label="Resize image"
+            title="Drag to resize, double-click to reset"
+            className="pointer-events-auto absolute top-1/2 -right-1.5 h-8 w-3 -translate-y-1/2 cursor-ew-resize touch-none rounded-full border-2 border-accent bg-surface shadow-sm"
+            onMouseDown={(e) => e.preventDefault()}
+            onPointerDown={resizeImage}
+            onDoubleClick={() => {
+              picked.removeAttribute("width");
+              emit();
+            }}
+          />
+          {dragWidth !== null && (
+            <span className="absolute top-2 left-2 rounded-md bg-black/70 px-1.5 py-0.5 text-[11px] text-white tabular-nums">
+              {dragWidth} px
+            </span>
+          )}
+        </div>
+      )}
       {error && <p className="text-xs text-rose-500">{error}</p>}
     </div>
   );

@@ -19,6 +19,8 @@ const ALLOWED = new Set([
   "h3",
 ]);
 
+export const IMAGE_WIDTH = { min: 48, max: 2000 };
+
 const ATTR = /([a-zA-Z_:][a-zA-Z0-9:._-]*)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/g;
 
 export function stripHtml(html: string): string {
@@ -90,6 +92,10 @@ function attrsFor(tag: string, raw: string): string {
     }
     if (tag === "img" && name === "alt") {
       out += ` alt="${value.replace(/"/g, "&quot;").slice(0, 200)}"`;
+    }
+    if (tag === "img" && name === "width" && /^\d{1,4}$/.test(value.trim())) {
+      const width = Number(value);
+      if (width >= IMAGE_WIDTH.min && width <= IMAGE_WIDTH.max) out += ` width="${width}"`;
     }
   }
   return out;
