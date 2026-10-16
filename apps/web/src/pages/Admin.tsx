@@ -159,7 +159,7 @@ function Sidebar({
 
         <Link
           href="/admin"
-          aria-label="Usercue"
+          aria-label="UserCue"
           className="relative mb-5 flex justify-center pt-1"
         >
           <span className="scale-125">

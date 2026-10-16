@@ -149,7 +149,7 @@ export const PERMISSION_META: Record<Permission, { label: string; description: s
 };
 
 export const SITE_DEFAULTS = {
-  name: "Usercue",
+  name: "UserCue",
   description:
     "Collect feedback, prioritize with your team, and keep customers in the loop from one place.",
   faviconUrl: "/usercue.svg",
