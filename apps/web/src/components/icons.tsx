@@ -213,6 +213,24 @@ export const LinkIcon = (p: P) => (
     <path d="M9.5 6.5 11 5a2.2 2.2 0 1 1 3 3l-2 2a2.2 2.2 0 0 1-3 0" />
   </Icon>
 );
+export const BulletList = (p: P) => (
+  <Icon {...p}>
+    <path d="M6.5 4h7M6.5 8h7M6.5 12h7" />
+    <circle cx="3" cy="4" r="0.6" fill="currentColor" />
+    <circle cx="3" cy="8" r="0.6" fill="currentColor" />
+    <circle cx="3" cy="12" r="0.6" fill="currentColor" />
+  </Icon>
+);
+export const NumberedList = (p: P) => (
+  <Icon {...p}>
+    <path d="M6.5 4h7M6.5 8h7M6.5 12h7" />
+    <path
+      d="M2.5 3 3.5 2.5v3M2.3 7.3a.9.9 0 0 1 1.6.4c0 .6-1.6 1.3-1.6 1.8h1.7"
+      strokeWidth="1.1"
+    />
+    <path d="M2.4 11h1.4l-.8 1a.8.8 0 1 1-.7 1.1" strokeWidth="1.1" />
+  </Icon>
+);
 export const ImageIcon = (p: P) => (
   <Icon {...p}>
     <rect x="2.5" y="3.5" width="11" height="9" rx="1.5" />
