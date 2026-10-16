@@ -1,8 +1,19 @@
-import { isEmptyHtml, LIMITS, sanitizeHtml } from "@usercue/shared";
+import { isEmptyHtml, isPostHref, LIMITS, sanitizeHtml } from "@usercue/shared";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { uploadImage } from "../lib/api";
 import { usePosts } from "../lib/queries";
-import { Bold, Hash, Heading, Highlight, ImageIcon, Italic, LinkIcon, Underline } from "./icons";
+import {
+  Bold,
+  BulletList,
+  Hash,
+  Heading,
+  Highlight,
+  ImageIcon,
+  Italic,
+  LinkIcon,
+  NumberedList,
+  Underline,
+} from "./icons";
 import { STATUS_DOT } from "./ui";
 
 interface EditorProps {
@@ -43,6 +54,136 @@ function readMention(root: HTMLElement | null) {
   return { node, start: end - query.length - 1, end, query };
 }
 
+function linkHref(value: string) {
+  if (isPostHref(value)) return value;
+  if (/^(?:https?:\/\/|mailto:)\S+$/i.test(value)) return value;
+  if (/^[\w-]+(?:\.[\w-]+)+(?:[/?#]\S*)?$/.test(value)) return `https://${value}`;
+  return null;
+}
+
+function imageSrc(value: string) {
+  return /^(?:https?:\/\/\S+|\/(?:api\/)?uploads\/[\w.-]+)$/i.test(value) ? value : null;
+}
+
+function wrapped(delimiter: string, char: string) {
+  return `${delimiter}([^${char}\\s](?:[^${char}]*[^${char}\\s])?)${delimiter}`;
+}
+
+interface InlineRule {
+  source: string;
+  render: (match: RegExpMatchArray) => string | null;
+}
+
+const INLINE: InlineRule[] = [
+  {
+    source: String.raw`!\[([^\]]*)\]\(([^)\s]+)\)`,
+    render: (m) => {
+      const src = imageSrc(m[2] ?? "");
+      return src ? `<img src="${src}" alt="${m[1] ?? ""}">` : null;
+    },
+  },
+  {
+    source: String.raw`(?<!!)\[([^\]]+)\]\(([^)\s]+)\)`,
+    render: (m) => {
+      const href = linkHref(m[2] ?? "");
+      return href ? `<a href="${href}">${m[1]}</a>` : null;
+    },
+  },
+  { source: wrapped(String.raw`\*\*`, "*"), render: (m) => `<b>${m[1]}</b>` },
+  { source: wrapped("__", "_"), render: (m) => `<u>${m[1]}</u>` },
+  { source: wrapped("==", "="), render: (m) => `<mark>${m[1]}</mark>` },
+  {
+    source: String.raw`(?<![\w*])${wrapped(String.raw`\*`, "*")}(?!\*)`,
+    render: (m) => `<i>${m[1]}</i>`,
+  },
+  { source: String.raw`(?<!\w)${wrapped("_", "_")}(?!\w)`, render: (m) => `<i>${m[1]}</i>` },
+];
+
+const TYPED = INLINE.map((rule) => ({ ...rule, pattern: new RegExp(`(?:${rule.source})$`) }));
+const PASTED = INLINE.map((rule) => ({ ...rule, pattern: new RegExp(rule.source, "g") }));
+const TRIGGERS = new Set(["*", "_", "=", ")"]);
+
+function inlineMarkdown(text: string) {
+  const held: string[] = [];
+  let out = escapeHtml(text);
+  for (const rule of PASTED) {
+    out = out.replace(rule.pattern, (...args) => {
+      const html = rule.render(args.slice(0, -2) as RegExpMatchArray);
+      if (!html) return args[0];
+      held.push(html);
+      return `${held.length - 1}`;
+    });
+  }
+  return out.replace(/(\d+)/g, (_, i) => held[Number(i)] ?? "");
+}
+
+const MARKDOWN_HINT = new RegExp(
+  [
+    String.raw`^\s*(?:[-*+]|\d+[.)])\s`,
+    String.raw`^#{1,3}\s`,
+    ...INLINE.map((rule) => rule.source),
+  ].join("|"),
+  "m",
+);
+
+function markdownToHtml(text: string, headings: boolean) {
+  const lines = text.replace(/\r\n?/g, "\n").replace(/\n+$/, "").split("\n");
+  const out: string[] = [];
+  let list: "ul" | "ol" | null = null;
+  for (const line of lines) {
+    const item = /^\s*(?:([-*+])|\d+[.)])\s+(.*)$/.exec(line);
+    const kind = item ? (item[1] ? "ul" : "ol") : null;
+    if (list && kind !== list) {
+      out.push(`</${list}>`);
+      list = null;
+    }
+    if (item && kind) {
+      if (!list) out.push(`<${kind}>`);
+      list = kind;
+      out.push(`<li>${inlineMarkdown(item[2] ?? "")}</li>`);
+      continue;
+    }
+    const heading = headings ? /^(#{1,3})\s+(.*)$/.exec(line) : null;
+    if (heading) {
+      const tag = heading[1]?.length === 3 ? "h3" : "h2";
+      out.push(`<${tag}>${inlineMarkdown(heading[2] ?? "")}</${tag}>`);
+    } else if (lines.length === 1) {
+      out.push(inlineMarkdown(line));
+    } else {
+      out.push(line.trim() ? `<div>${inlineMarkdown(line)}</div>` : "<div><br></div>");
+    }
+  }
+  if (list) out.push(`</${list}>`);
+  return sanitizeHtml(out.join(""));
+}
+
+const BLOCKS = new Set(["DIV", "P", "LI", "UL", "OL", "H2", "H3"]);
+
+function lineBefore(root: HTMLElement, node: Text, offset: number) {
+  let text = node.data.slice(0, offset);
+  let cur: Node = node;
+  while (cur !== root) {
+    for (let prev = cur.previousSibling; prev; prev = prev.previousSibling) {
+      if (prev.nodeName === "BR" || BLOCKS.has(prev.nodeName)) return text;
+      text = (prev.textContent ?? "") + text;
+    }
+    const parent = cur.parentNode;
+    if (!parent || parent === root || BLOCKS.has(parent.nodeName)) return text;
+    cur = parent;
+  }
+  return text;
+}
+
+function selectText(node: Text, start: number, end: number) {
+  const sel = window.getSelection();
+  if (!sel) return;
+  const range = document.createRange();
+  range.setStart(node, start);
+  range.setEnd(node, end);
+  sel.removeAllRanges();
+  sel.addRange(range);
+}
+
 export function Editor({
   value,
   onChange,
@@ -56,6 +197,7 @@ export function Editor({
   const root = useRef<HTMLDivElement>(null);
   const file = useRef<HTMLInputElement>(null);
   const saved = useRef<Range | null>(null);
+  const formatted = useRef<Element | null>(null);
   const [linking, setLinking] = useState(false);
   const [href, setHref] = useState("https://");
   const [busy, setBusy] = useState(false);
@@ -71,6 +213,31 @@ export function Editor({
   useEffect(() => {
     if (autoFocus) root.current?.focus();
   }, [autoFocus]);
+
+  useEffect(() => {
+    const el = root.current;
+    if (!el) return;
+    const onBeforeInput = (e: InputEvent) => {
+      const target = formatted.current;
+      formatted.current = null;
+      const sel = window.getSelection();
+      if (!target?.isConnected || e.inputType !== "insertText" || !e.data) return;
+      if (!sel?.rangeCount || !sel.isCollapsed) return;
+      const caret = sel.getRangeAt(0);
+      if (!target.contains(caret.startContainer)) return;
+      const rest = document.createRange();
+      rest.setStart(caret.startContainer, caret.startOffset);
+      rest.setEndAfter(target);
+      if (rest.toString() !== "") return;
+      e.preventDefault();
+      rest.selectNode(target);
+      sel.removeAllRanges();
+      sel.addRange(rest);
+      exec("insertHTML", target.outerHTML + escapeHtml(e.data));
+    };
+    el.addEventListener("beforeinput", onBeforeInput);
+    return () => el.removeEventListener("beforeinput", onBeforeInput);
+  }, []);
 
   function emit() {
     const el = root.current;
@@ -97,6 +264,48 @@ export function Editor({
     root.current?.focus();
     exec(command, arg);
     emit();
+  }
+
+  function typeMarkdown(input: InputEvent) {
+    const el = root.current;
+    const sel = window.getSelection();
+    if (!el || input.isComposing || input.inputType !== "insertText" || !input.data) return;
+    if (!sel?.rangeCount || !sel.isCollapsed) return;
+    const { startContainer, startOffset: end } = sel.getRangeAt(0);
+    if (startContainer.nodeType !== Node.TEXT_NODE || !el.contains(startContainer)) return;
+    const node = startContainer as Text;
+
+    if (input.data === " ") {
+      const line = lineBefore(el, node, end).replace(/ /g, " ");
+      if (line.length > end) return;
+      let command: [string, string?] | null = null;
+      if (/^[-*+] $/.test(line)) command = ["insertUnorderedList"];
+      else if (/^\d+[.)] $/.test(line)) command = ["insertOrderedList"];
+      else if (headings && /^#{1,3} $/.test(line)) {
+        command = ["formatBlock", line.length === 4 ? "h3" : "h2"];
+      }
+      if (!command) return;
+      if (command[0] !== "formatBlock" && document.queryCommandState(command[0])) return;
+      selectText(node, end - line.length, end);
+      exec("delete");
+      exec(...command);
+      return;
+    }
+
+    if (!TRIGGERS.has(input.data)) return;
+    const before = node.data.slice(0, end);
+    for (const rule of TYPED) {
+      const match = rule.pattern.exec(before);
+      if (!match) continue;
+      const html = rule.render(match.map((part) => part && escapeHtml(part)) as RegExpMatchArray);
+      if (!html) continue;
+      selectText(node, end - match[0].length, end);
+      exec("insertHTML", html);
+      const tag = /^<(b|i|u|mark|a)[\s>]/.exec(html)?.[1];
+      const at = window.getSelection()?.anchorNode?.parentElement;
+      formatted.current = (tag && at?.closest(tag)) || null;
+      return;
+    }
   }
 
   function applyLink() {
@@ -182,6 +391,12 @@ export function Editor({
         >
           <Highlight />
         </Tool>
+        <Tool label="Bulleted list" keys="⌘⇧8" onClick={() => run("insertUnorderedList")}>
+          <BulletList />
+        </Tool>
+        <Tool label="Numbered list" keys="⌘⇧7" onClick={() => run("insertOrderedList")}>
+          <NumberedList />
+        </Tool>
         <Tool
           label="Link"
           keys="⌘K"
@@ -260,7 +475,8 @@ export function Editor({
         contentEditable
         data-placeholder={placeholder}
         className="rich editor is-empty min-h-16 outline-none"
-        onInput={() => {
+        onInput={(e) => {
+          typeMarkdown(e.nativeEvent as InputEvent);
           if (mentions) {
             const found = readMention(root.current);
             setMention((open) => (found ? { query: found.query } : open?.pinned ? open : null));
@@ -269,10 +485,17 @@ export function Editor({
         }}
         onPaste={(e) => {
           const image = [...e.clipboardData.files].find((f) => f.type.startsWith("image/"));
-          if (!image) return;
+          if (image) {
+            e.preventDefault();
+            remember();
+            void insertFile(image);
+            return;
+          }
+          const text = e.clipboardData.getData("text/plain");
+          if (!MARKDOWN_HINT.test(text)) return;
           e.preventDefault();
-          remember();
-          void insertFile(image);
+          exec("insertHTML", markdownToHtml(text, headings));
+          emit();
         }}
         onKeyDown={(e) => {
           if (e.key === "Escape" && mention) {
@@ -283,7 +506,10 @@ export function Editor({
           const mod = e.metaKey || e.ctrlKey;
           if (!mod) return;
           const key = e.key.toLowerCase();
-          if (key === "b") {
+          if (e.shiftKey && (e.code === "Digit8" || e.code === "Digit7")) {
+            e.preventDefault();
+            run(e.code === "Digit8" ? "insertUnorderedList" : "insertOrderedList");
+          } else if (key === "b") {
             e.preventDefault();
             run("bold");
           } else if (key === "i") {
