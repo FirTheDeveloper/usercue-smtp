@@ -158,7 +158,7 @@ function Sidebar({
         />
 
         <Link
-          href="/admin"
+          href="/"
           aria-label="Usercue"
           className="relative mb-5 flex justify-center pt-1"
         >
