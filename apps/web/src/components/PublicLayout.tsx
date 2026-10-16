@@ -58,12 +58,12 @@ export function Logo({
     <span className="inline-flex items-center gap-2 text-[13px] font-semibold tracking-tight">
       <img
         src={src}
-        alt={wordmark ? "" : "Usercue"}
+        alt={wordmark ? "" : "UserCue"}
         className={
           compact ? "h-5 w-auto max-w-28 object-contain" : "h-6 w-auto max-w-32 object-contain"
         }
       />
-      {wordmark ? "Usercue" : null}
+      {wordmark ? "UserCue" : null}
     </span>
   );
 }

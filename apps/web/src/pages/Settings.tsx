@@ -183,7 +183,7 @@ function ResendSettings() {
           type="text"
           value={from}
           onChange={(e) => setFrom(e.target.value)}
-          placeholder="Usercue <noreply@yourdomain.com>"
+          placeholder="UserCue <noreply@yourdomain.com>"
           autoComplete="off"
         />
       </label>
@@ -552,7 +552,7 @@ function SiteDetails() {
     <form onSubmit={submit} className="flex flex-col gap-3">
       <SectionHead title="Name and description">
         Shown in the browser tab, search results, and link previews. Leave them empty to use the
-        Usercue defaults.
+        UserCue defaults.
       </SectionHead>
       <label className="flex flex-col gap-1.5">
         <span className="px-1 text-[11px] text-muted">Name</span>
@@ -665,7 +665,7 @@ function BrandingSettings() {
 
       <section className="flex flex-col gap-3">
         <SectionHead title="Color">
-          The accent on buttons, links, and hearts. Pink is the Usercue default.
+          The accent on buttons, links, and hearts. Pink is the UserCue default.
         </SectionHead>
         <div className="flex flex-wrap gap-2">
           {ACCENTS.map((color) => {

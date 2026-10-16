@@ -99,7 +99,7 @@ export const LIMITS = {
   imageBytes: 1_500_000,
 } as const;
 
-export { isEmptyHtml, isPostHref, sanitizeHtml, stripHtml } from "./html";
+export { IMAGE_WIDTH, isEmptyHtml, isPostHref, sanitizeHtml, stripHtml } from "./html";
 
 export const PERMISSIONS = [
   "dashboard",
@@ -149,7 +149,7 @@ export const PERMISSION_META: Record<Permission, { label: string; description: s
 };
 
 export const SITE_DEFAULTS = {
-  name: "Usercue",
+  name: "UserCue",
   description:
     "Collect feedback, prioritize with your team, and keep customers in the loop from one place.",
   faviconUrl: "/usercue.svg",

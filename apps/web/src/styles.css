@@ -294,6 +294,10 @@
 .rich img {
   @apply my-2 max-h-72 max-w-full rounded-xl;
 }
+.rich img[width] {
+  height: auto;
+  max-height: none;
+}
 .rich h2,
 .rich h3 {
   margin: 1.15em 0 0.35em;
