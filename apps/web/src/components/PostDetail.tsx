@@ -267,7 +267,8 @@ function AssigneeControl({
 }) {
   const { data: me } = useMe();
   const mode = me?.assignmentMode ?? "off";
-  const { data: settings } = useSettings(mode === "manual" && canTriage);
+  // forgot this part too
+  const { data: settings } = useSettings(mode !== "off" && canTriage);
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const staff = settings?.staff ?? [];
@@ -292,6 +293,7 @@ function AssigneeControl({
     <span>Unassigned</span>
   );
 
+  // change to off cuz i still want to assign on automatic or manual
   if (mode === "off" || !canTriage) {
     return <span className="chip text-muted">{label}</span>;
   }
