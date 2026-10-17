@@ -1,6 +1,7 @@
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { defineConfig, loadEnv, type Plugin } from "vite";
+import { VitePWA } from "vite-plugin-pwa";
 
 const STUB_ID = "\0usercue-server-stub";
 
@@ -25,7 +26,49 @@ export default defineConfig(({ mode }) => {
   const proxy = { target: apiTarget, xfwd: true };
 
   return {
-    plugins: [stubServerPackage(), react(), tailwindcss()],
+    plugins: [
+      stubServerPackage(),
+      react(),
+      tailwindcss(),
+      VitePWA({
+        registerType: "autoUpdate",
+        includeAssets: [
+          "apple-touch-icon.png",
+          "pwa-192x192.png",
+          "pwa-512x512.png",
+          "maskable-512x512.png",
+        ],
+        manifest: {
+          name: "UserCue",
+          short_name: "UserCue",
+          description:
+            "Collect feedback, prioritize with your team, and keep customers in the loop from one place.",
+          start_url: "/",
+          scope: "/",
+          display: "standalone",
+          background_color: "#f3efe8",
+          theme_color: "#080706",
+          lang: "en",
+          icons: [
+            { src: "/pwa-192x192.png", sizes: "192x192", type: "image/png" },
+            { src: "/pwa-512x512.png", sizes: "512x512", type: "image/png" },
+            {
+              src: "/maskable-512x512.png",
+              sizes: "512x512",
+              type: "image/png",
+              purpose: "maskable",
+            },
+          ],
+        },
+        workbox: {
+          globPatterns: ["**/*.{js,css,html,svg,woff2}"],
+        },
+        devOptions: {
+          enabled: true,
+        },
+      }),
+    ],
+    cacheDir: "../../node_modules/.vite/web",
     clearScreen: false,
     server: {
       host: true,

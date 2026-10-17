@@ -3,6 +3,7 @@ import "@fontsource-variable/geist";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { App } from "./App";
+import { Pwa } from "./components/Pwa";
 import { applyTheme, getTheme } from "./lib/theme";
 import "./styles.css";
 
@@ -19,6 +20,7 @@ createRoot(root).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
       <App />
+      <Pwa />
     </QueryClientProvider>
   </StrictMode>,
 );

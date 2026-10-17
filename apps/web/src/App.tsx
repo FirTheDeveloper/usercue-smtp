@@ -4,6 +4,7 @@ import { PublicLayout } from "./components/PublicLayout";
 import { applyAccent } from "./lib/accent";
 import { useMe } from "./lib/queries";
 import { applySite } from "./lib/site";
+import { useOnline } from "./lib/useOnline";
 import { Account } from "./pages/Account";
 import { Admin } from "./pages/Admin";
 import { AuthPage } from "./pages/Auth";
@@ -21,6 +22,7 @@ const Public = ({ children, wide }: { children: ReactNode; wide?: boolean }) => 
 
 export function App() {
   const { data: me, isLoading, isError, refetch } = useMe();
+  const online = useOnline();
   useEffect(() => {
     if (me?.accent) applyAccent(me.accent);
   }, [me?.accent]);
@@ -33,8 +35,14 @@ export function App() {
   if (isError || !me) {
     return (
       <div className="flex min-h-dvh flex-col items-center justify-center gap-2 bg-bg px-4 text-center">
-        <p className="text-[13px] font-medium">Couldn&apos;t reach the server</p>
-        <p className="text-muted">Make sure the API is running, then try again.</p>
+        <p className="text-[13px] font-medium">
+          {online ? "Couldn&apos;t reach the server" : "You&apos;re offline"}
+        </p>
+        <p className="text-muted">
+          {online
+            ? "Make sure the API is running, then try again."
+            : "Reconnect to the internet, then try again."}
+        </p>
         <button type="button" className="btn-ghost mt-2" onClick={() => refetch()}>
           Try again
         </button>
