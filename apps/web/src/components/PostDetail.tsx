@@ -293,8 +293,7 @@ function AssigneeControl({
     <span>Unassigned</span>
   );
 
-  // change to off cuz i still want to assign on automatic or manual
-  if (mode === "off" || !canTriage) {
+  if (!canTriage) {
     return <span className="chip text-muted">{label}</span>;
   }
 
