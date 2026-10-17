@@ -4,6 +4,8 @@ const KEY = "usercue-theme";
 
 export type Theme = "light" | "dark";
 
+const THEME_COLOR: Record<Theme, string> = { dark: "#080706", light: "#f3efe8" };
+
 const listeners = new Set<() => void>();
 
 function read(): Theme {
@@ -23,6 +25,7 @@ export function applyTheme(theme: Theme) {
   if (theme === "dark") root.dataset.theme = "dark";
   else delete root.dataset.theme;
   root.style.colorScheme = theme;
+  document.querySelector('meta[name="theme-color"]')?.setAttribute("content", THEME_COLOR[theme]);
   try {
     localStorage.setItem(KEY, theme);
   } catch {}
