@@ -4,7 +4,9 @@ import { SQL } from "bun";
 import { env } from "./env";
 
 const tx = new AsyncLocalStorage<SQL>();
-let pool = new SQL(env.databaseUrl);
+// Without `bigint`, Bun returns BIGINT and COUNT(*) as strings. mapRow turns BigInt into numbers.
+const SQL_OPTIONS = { bigint: true };
+let pool = new SQL(env.databaseUrl, SQL_OPTIONS);
 
 function client(): SQL {
   return tx.getStore() ?? pool;
@@ -498,7 +500,7 @@ export async function initDb() {
         try {
           await ensureLocalDatabase();
           await pool.end();
-          pool = new SQL(env.databaseUrl);
+          pool = new SQL(env.databaseUrl, SQL_OPTIONS);
           continue;
         } catch (provisionErr) {
           last = provisionErr;
