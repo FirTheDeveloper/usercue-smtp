@@ -167,12 +167,14 @@ export function RoleBadge({
   }[size];
 
   return (
-    <span className={`inline-flex min-w-0 shrink-0 items-center ${chip}`}>
+    <span className={`inline-flex min-w-0 items-center ${chip}`}>
       {iconUrl && !failed && (
         <img
           src={iconUrl}
           alt=""
           title={name}
+          width={iconSize === "size-3.5" ? 14 : 16}
+          height={iconSize === "size-3.5" ? 14 : 16}
           onError={() => setFailed(true)}
           className={`shrink-0 ${iconSize} object-cover`}
         />
