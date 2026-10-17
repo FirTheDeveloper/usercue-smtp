@@ -1,5 +1,12 @@
 import { vValidator } from "@hono/valibot-validator";
-import { isEmptyHtml, LIMITS, SORTS, STATUSES, type Status, sanitizeHtml } from "@usercue/shared";
+import {
+  isEmptyHtml,
+  LIMITS,
+  SORTS,
+  STATUSES,
+  type Status,
+  sanitizeHtml,
+} from "@usercue/shared";
 import { Hono } from "hono";
 import * as v from "valibot";
 import { type CommentRow, db, type PostRow } from "../db";
@@ -7,11 +14,23 @@ import { type AppEnv, rateLimit, requirePermission } from "../middleware";
 import { notifyComment, notifyNewPost, notifyStatusChange } from "../notify";
 import { publicOrigin } from "../oauth";
 import { hasPermission, parsePermissions } from "../roles";
-import { assignmentMode, guestsAllowed, listAssignableStaff, pickNextAssignee } from "../workspace";
+import {
+  assignmentMode,
+  guestsAllowed,
+  listAssignableStaff,
+  pickNextAssignee,
+} from "../workspace";
 
-const text = (max: number) => v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(max));
+const text = (max: number) =>
+  v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(max));
 const numberParam = (min: number, max: number) =>
-  v.pipe(v.string(), v.transform(Number), v.integer(), v.minValue(min), v.maxValue(max));
+  v.pipe(
+    v.string(),
+    v.transform(Number),
+    v.integer(),
+    v.minValue(min),
+    v.maxValue(max),
+  );
 
 const listQuery = v.object({
   board: v.optional(v.string()),
@@ -33,7 +52,9 @@ const updatePost = v.object({
   status: v.optional(v.picklist(STATUSES)),
   title: v.optional(text(LIMITS.title)),
   body: v.optional(v.pipe(v.string(), v.trim(), v.maxLength(LIMITS.body))),
-  assigneeId: v.optional(v.nullable(v.pipe(v.number(), v.integer(), v.minValue(1)))),
+  assigneeId: v.optional(
+    v.nullable(v.pipe(v.number(), v.integer(), v.minValue(1))),
+  ),
   tagIds: v.optional(v.array(v.pipe(v.number(), v.integer(), v.minValue(1)))),
 });
 
@@ -122,12 +143,18 @@ const listComments = db.query<CommentListRow>(
    WHERE c.post_id = ?
    ORDER BY c.created_at, c.id`,
 );
-const findComment = db.query<{ id: number; post_id: number; parent_id: number | null }>(
-  "SELECT id, post_id, parent_id FROM comments WHERE id = ?",
-);
+const findComment = db.query<{
+  id: number;
+  post_id: number;
+  parent_id: number | null;
+}>("SELECT id, post_id, parent_id FROM comments WHERE id = ?");
 
-const boardBySlug = db.query<{ id: number }>("SELECT id FROM boards WHERE slug = ?");
-const postExists = db.query<{ id: number }>("SELECT id FROM posts WHERE id = ?");
+const boardBySlug = db.query<{ id: number }>(
+  "SELECT id FROM boards WHERE slug = ?",
+);
+const postExists = db.query<{ id: number }>(
+  "SELECT id FROM posts WHERE id = ?",
+);
 
 const insertPost = db.query<{ id: number }>(
   "INSERT INTO posts (board_id, title, body, author_name, author_id) VALUES (?, ?, ?, ?, ?) RETURNING id",
@@ -138,8 +165,12 @@ const insertVote = db.query(
 const deleteVote = db.query<{ post_id: number }>(
   "DELETE FROM votes WHERE post_id = ? AND voter_id = ? RETURNING post_id",
 );
-const bumpVotes = db.query("UPDATE posts SET vote_count = vote_count + ? WHERE id = ?");
-const readVotes = db.query<{ vote_count: number }>("SELECT vote_count FROM posts WHERE id = ?");
+const bumpVotes = db.query(
+  "UPDATE posts SET vote_count = vote_count + ? WHERE id = ?",
+);
+const readVotes = db.query<{ vote_count: number }>(
+  "SELECT vote_count FROM posts WHERE id = ?",
+);
 const insertComment = db.query<CommentListRow>(
   `INSERT INTO comments (post_id, parent_id, author_name, body, is_team, author_id)
    VALUES (?, ?, ?, ?, ?, ?)
@@ -149,8 +180,12 @@ const insertComment = db.query<CommentListRow>(
      CAST(NULL AS TEXT) AS author_role_icon,
      CAST(NULL AS TEXT) AS author_role_perms`,
 );
-const bumpComments = db.query("UPDATE posts SET comment_count = comment_count + 1 WHERE id = ?");
-const deleteComment = db.query("DELETE FROM comments WHERE id = ? AND post_id = ?");
+const bumpComments = db.query(
+  "UPDATE posts SET comment_count = comment_count + 1 WHERE id = ?",
+);
+const deleteComment = db.query(
+  "DELETE FROM comments WHERE id = ? AND post_id = ?",
+);
 const recountComments = db.query(
   "UPDATE posts SET comment_count = (SELECT COUNT(*)::int FROM comments WHERE post_id = ?) WHERE id = ?",
 );
@@ -208,8 +243,13 @@ const removeComment = (postId: number, commentId: number) =>
     await recountComments.run(postId, postId);
   });
 
-function roleBadge(name: string | null, icon: string | null, permissions: string | null) {
-  if (!name || !hasPermission(parsePermissions(permissions), "dashboard")) return null;
+function roleBadge(
+  name: string | null,
+  icon: string | null,
+  permissions: string | null,
+) {
+  if (!name || !hasPermission(parsePermissions(permissions), "dashboard"))
+    return null;
   return { name, iconUrl: icon || null };
 }
 
@@ -220,7 +260,11 @@ const serialize = (row: PostListRow) => ({
   status: row.status,
   authorName: row.author_name,
   authorAvatar: row.author_avatar || null,
-  authorRole: roleBadge(row.author_role_name, row.author_role_icon, row.author_role_perms),
+  authorRole: roleBadge(
+    row.author_role_name,
+    row.author_role_icon,
+    row.author_role_perms,
+  ),
   voteCount: row.vote_count,
   commentCount: row.comment_count,
   createdAt: row.created_at,
@@ -242,13 +286,19 @@ const serializeComment = (row: CommentListRow) => ({
   parentId: row.parent_id,
   authorName: row.author_name,
   authorAvatar: row.author_avatar || null,
-  authorRole: roleBadge(row.author_role_name, row.author_role_icon, row.author_role_perms),
+  authorRole: roleBadge(
+    row.author_role_name,
+    row.author_role_icon,
+    row.author_role_perms,
+  ),
   body: row.body,
   isTeam: row.is_team === 1,
   createdAt: row.created_at,
 });
 
-function readTags(value: unknown): { id: number; name: string; color: string }[] {
+function readTags(
+  value: unknown,
+): { id: number; name: string; color: string }[] {
   let raw = value;
   if (typeof raw === "string") {
     try {
@@ -269,7 +319,12 @@ function readTags(value: unknown): { id: number; name: string; color: string }[]
           : typeof row.id === "string" && /^\d+$/.test(row.id)
             ? Number(row.id)
             : null;
-    if (id === null || typeof row.name !== "string" || typeof row.color !== "string") return [];
+    if (
+      id === null ||
+      typeof row.name !== "string" ||
+      typeof row.color !== "string"
+    )
+      return [];
     return [{ id, name: row.name, color: row.color }];
   });
 }
@@ -292,7 +347,9 @@ const listStatusChanges = db.query<StatusChangeRow>(
 const insertStatusChange = db.query(
   "INSERT INTO status_changes (post_id, status, actor_id, actor_name) VALUES (?, ?, ?, ?)",
 );
-const findPostStatus = db.query<{ status: Status }>("SELECT status FROM posts WHERE id = ?");
+const findPostStatus = db.query<{ status: Status }>(
+  "SELECT status FROM posts WHERE id = ?",
+);
 const findPostMeta = db.query<{
   id: number;
   title: string;
@@ -317,7 +374,9 @@ const serializeChange = (row: StatusChangeRow) => ({
 const setAssignee = db.query("UPDATE posts SET assignee_id = ? WHERE id = ?");
 const listTagIds = db.query<{ id: number }>("SELECT id FROM tags");
 const clearPostTags = db.query("DELETE FROM post_tags WHERE post_id = ?");
-const insertPostTag = db.query("INSERT INTO post_tags (post_id, tag_id) VALUES (?, ?)");
+const insertPostTag = db.query(
+  "INSERT INTO post_tags (post_id, tag_id) VALUES (?, ?)",
+);
 
 function replaceTags(postId: number, tagIds: number[]) {
   return db.transaction(async () => {
@@ -339,7 +398,10 @@ async function applyUpdate(
     sets.push(`${key} = $${key}`);
     values[key] = value;
   }
-  if (sets.length) await db.query(`UPDATE posts SET ${sets.join(", ")} WHERE id = $id`).run(values);
+  if (sets.length)
+    await db
+      .query(`UPDATE posts SET ${sets.join(", ")} WHERE id = $id`)
+      .run(values);
 }
 
 export const posts = new Hono<AppEnv>()
@@ -358,8 +420,13 @@ export const posts = new Hono<AppEnv>()
   })
 
   .get("/counts", async (c) => {
-    const rows = await statusCounts.all({ board: c.req.query("board") ?? null });
-    const counts = Object.fromEntries(STATUSES.map((s) => [s, 0])) as Record<Status, number>;
+    const rows = await statusCounts.all({
+      board: c.req.query("board") ?? null,
+    });
+    const counts = Object.fromEntries(STATUSES.map((s) => [s, 0])) as Record<
+      Status,
+      number
+    >;
     for (const row of rows) counts[row.status] = row.count;
     return c.json(counts);
   })
@@ -368,7 +435,8 @@ export const posts = new Hono<AppEnv>()
     const { board, title, body, name } = c.req.valid("json");
     const team = c.get("user");
     const identity = c.get("identity");
-    if (team?.suspended) return c.json({ error: "Your account has been suspended." }, 403);
+    if (team?.suspended)
+      return c.json({ error: "Your account has been suspended." }, 403);
     if (!team && !identity && !(await guestsAllowed())) {
       return c.json({ error: "Sign in to share feedback" }, 403);
     }
@@ -390,7 +458,10 @@ export const posts = new Hono<AppEnv>()
     await toggleVote(created.id, c.get("visitorId"));
     await insertStatusChange.run(created.id, "open", team?.id ?? null, author);
 
-    const post = await getPost.get({ id: created.id, voter: c.get("visitorId") });
+    const post = await getPost.get({
+      id: created.id,
+      voter: c.get("visitorId"),
+    });
     if (!post) return c.json({ error: "Could not create post" }, 500);
     void notifyNewPost(publicOrigin(c), serialize(post));
     return c.json(serialize(post), 201);
@@ -406,14 +477,20 @@ export const posts = new Hono<AppEnv>()
     return c.json({ ...serialize(post), comments, history });
   })
 
-  .post("/:id/vote", rateLimit(60, 60), vValidator("param", idParam), async (c) => {
-    const { id } = c.req.valid("param");
-    if (!(await postExists.get(id))) return c.json({ error: "Not found" }, 404);
+  .post(
+    "/:id/vote",
+    rateLimit(60, 60),
+    vValidator("param", idParam),
+    async (c) => {
+      const { id } = c.req.valid("param");
+      if (!(await postExists.get(id)))
+        return c.json({ error: "Not found" }, 404);
 
-    const { voteCount } = await toggleVote(id, c.get("visitorId"));
-    const voted = await hasVote.get(id, c.get("visitorId"));
-    return c.json({ voteCount, voted: (voted?.n ?? 0) > 0 });
-  })
+      const { voteCount } = await toggleVote(id, c.get("visitorId"));
+      const voted = await hasVote.get(id, c.get("visitorId"));
+      return c.json({ voteCount, voted: (voted?.n ?? 0) > 0 });
+    },
+  )
 
   .post(
     "/:id/comments",
@@ -423,27 +500,33 @@ export const posts = new Hono<AppEnv>()
     async (c) => {
       const { id } = c.req.valid("param");
       const { body, name, parentId } = c.req.valid("json");
-      if (!(await postExists.get(id))) return c.json({ error: "Not found" }, 404);
+      if (!(await postExists.get(id)))
+        return c.json({ error: "Not found" }, 404);
 
       let replyTo: number | null = null;
       if (parentId) {
         const parent = await findComment.get(parentId);
         if (!parent || parent.post_id !== id) {
-          return c.json({ error: "That comment is not on this suggestion." }, 400);
+          return c.json(
+            { error: "That comment is not on this suggestion." },
+            400,
+          );
         }
         replyTo = parent.id;
       }
 
       const team = c.get("user");
       const identity = c.get("identity");
-      if (team?.suspended) return c.json({ error: "Your account has been suspended." }, 403);
+      if (team?.suspended)
+        return c.json({ error: "Your account has been suspended." }, 403);
       if (!team && !identity && !(await guestsAllowed())) {
         return c.json({ error: "Sign in to comment" }, 403);
       }
       const author = team?.name ?? identity?.name ?? name;
       if (!author) return c.json({ error: "Name is required" }, 400);
       const clean = sanitizeHtml(body);
-      if (isEmptyHtml(clean)) return c.json({ error: "Comment cannot be empty" }, 400);
+      if (isEmptyHtml(clean))
+        return c.json({ error: "Comment cannot be empty" }, 400);
 
       const row = await addComment(
         id,
@@ -476,17 +559,23 @@ export const posts = new Hono<AppEnv>()
     },
   )
 
-  .delete("/:id/comments/:commentId", vValidator("param", commentParam), async (c) => {
-    const user = c.get("user");
-    if (!user) return c.json({ error: "Unauthorized" }, 401);
-    if (user.suspended) return c.json({ error: "Your account has been suspended." }, 403);
-    if (!user.staff) return c.json({ error: "Forbidden" }, 403);
-    const { id, commentId } = c.req.valid("param");
-    const row = await findComment.get(commentId);
-    if (!row || row.post_id !== id) return c.json({ error: "Not found" }, 404);
-    await removeComment(id, commentId);
-    return c.json({ ok: true });
-  })
+  .delete(
+    "/:id/comments/:commentId",
+    vValidator("param", commentParam),
+    async (c) => {
+      const user = c.get("user");
+      if (!user) return c.json({ error: "Unauthorized" }, 401);
+      if (user.suspended)
+        return c.json({ error: "Your account has been suspended." }, 403);
+      if (!user.staff) return c.json({ error: "Forbidden" }, 403);
+      const { id, commentId } = c.req.valid("param");
+      const row = await findComment.get(commentId);
+      if (!row || row.post_id !== id)
+        return c.json({ error: "Not found" }, 404);
+      await removeComment(id, commentId);
+      return c.json({ ok: true });
+    },
+  )
 
   .patch(
     "/:id",
@@ -495,11 +584,12 @@ export const posts = new Hono<AppEnv>()
     vValidator("json", updatePost),
     async (c) => {
       const { id } = c.req.valid("param");
-      if (!(await postExists.get(id))) return c.json({ error: "Not found" }, 404);
+      if (!(await postExists.get(id)))
+        return c.json({ error: "Not found" }, 404);
 
       const patch = c.req.valid("json");
       const mode = await assignmentMode();
-      if (patch.assigneeId !== undefined && mode !== "manual") {
+      if (patch.assigneeId !== undefined && mode === "off") {
         return c.json(
           {
             error:
@@ -525,18 +615,29 @@ export const posts = new Hono<AppEnv>()
       });
       if (patch.status && previous && patch.status !== previous.status) {
         const actor = c.get("user");
-        await insertStatusChange.run(id, patch.status, actor?.id ?? null, actor?.name ?? "Team");
-        if (mode === "auto" && patch.status === "planned") {
+        await insertStatusChange.run(
+          id,
+          patch.status,
+          actor?.id ?? null,
+          actor?.name ?? "Team",
+        );
+        if (
+          mode === "auto" &&
+          patch.status === "planned" &&
+          (patch.assigneeId === undefined || null)
+        ) {
           const next = await pickNextAssignee();
           if (next) await setAssignee.run(next.id, id);
         }
       }
-      if (mode === "manual" && patch.assigneeId !== undefined) {
+      if (mode !== "off" && patch.assigneeId !== undefined) {
+        // change assignee
         await setAssignee.run(patch.assigneeId, id);
       }
       if (patch.tagIds !== undefined) {
         const tagIds = [...new Set(patch.tagIds)];
-        if (tagIds.length > 8) return c.json({ error: "A suggestion can have up to 8 tags." }, 400);
+        if (tagIds.length > 8)
+          return c.json({ error: "A suggestion can have up to 8 tags." }, 400);
         const known = new Set((await listTagIds.all()).map((tag) => tag.id));
         if (tagIds.some((tagId) => !known.has(tagId))) {
           return c.json({ error: "Unknown tag." }, 400);
@@ -546,13 +647,22 @@ export const posts = new Hono<AppEnv>()
       const post = await getPost.get({ id, voter: c.get("visitorId") });
       if (!post) return c.json({ error: "Not found" }, 404);
       if (patch.status && previous && patch.status !== previous.status) {
-        void notifyStatusChange(publicOrigin(c), serialize(post), c.get("user")?.name ?? "Team");
+        void notifyStatusChange(
+          publicOrigin(c),
+          serialize(post),
+          c.get("user")?.name ?? "Team",
+        );
       }
       return c.json(serialize(post));
     },
   )
 
-  .delete("/:id", requirePermission("manage_posts"), vValidator("param", idParam), async (c) => {
-    await removePost.run(c.req.valid("param").id);
-    return c.json({ ok: true });
-  });
+  .delete(
+    "/:id",
+    requirePermission("manage_posts"),
+    vValidator("param", idParam),
+    async (c) => {
+      await removePost.run(c.req.valid("param").id);
+      return c.json({ ok: true });
+    },
+  );
