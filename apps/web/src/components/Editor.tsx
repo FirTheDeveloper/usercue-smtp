@@ -8,6 +8,7 @@ import {
   useState,
 } from "react";
 import { uploadImage } from "../lib/api";
+import { type EmojiMatch, emojiFor, loadEmoji, searchEmoji } from "../lib/emoji";
 import { usePosts } from "../lib/queries";
 import {
   Bold,
@@ -34,6 +35,13 @@ interface EditorProps {
   autoFocus?: boolean;
 }
 
+interface EmojiMenu {
+  items: EmojiMatch[];
+  index: number;
+  top: number;
+  left: number;
+}
+
 interface ImageFrame {
   top: number;
   left: number;
@@ -53,7 +61,7 @@ function escapeHtml(value: string) {
     .replace(/"/g, "&quot;");
 }
 
-function readMention(root: HTMLElement | null) {
+function caretText(root: HTMLElement | null) {
   const sel = window.getSelection();
   if (!sel?.rangeCount || !sel.isCollapsed) return null;
   const range = sel.getRangeAt(0);
@@ -61,11 +69,29 @@ function readMention(root: HTMLElement | null) {
   const node = range.startContainer as Text;
   if (!root?.contains(node)) return null;
   const end = range.startOffset;
-  const text = node.data.slice(0, end);
-  const match = text.match(/(^|[\s\u00a0])#([^\s#]*)$/);
-  if (!match) return null;
+  return { node, end, text: node.data.slice(0, end) };
+}
+
+function readMention(root: HTMLElement | null) {
+  const caret = caretText(root);
+  const match = caret?.text.match(/(^|[\s\u00a0])#([^\s#]*)$/);
+  if (!caret || !match) return null;
   const query = match[2] ?? "";
-  return { node, start: end - query.length - 1, end, query };
+  return { node: caret.node, start: caret.end - query.length - 1, end: caret.end, query };
+}
+
+// Skips colons that follow a word or another colon, so times and URLs are left alone.
+function readShortcode(root: HTMLElement | null) {
+  const caret = caretText(root);
+  const match = caret?.text.match(/(?<![\w:]):([\w+-]+)(:?)$/);
+  if (!caret || !match) return null;
+  return {
+    node: caret.node,
+    start: caret.end - match[0].length,
+    end: caret.end,
+    name: match[1] ?? "",
+    closed: match[2] === ":",
+  };
 }
 
 function linkHref(value: string) {
@@ -171,6 +197,9 @@ function markdownToHtml(text: string, headings: boolean) {
   return sanitizeHtml(out.join(""));
 }
 
+const EMOJI_MENU_WIDTH = 224;
+const CARET_KEYS = new Set(["ArrowLeft", "ArrowRight", "Home", "End"]);
+
 const BLOCKS = new Set(["DIV", "P", "LI", "UL", "OL", "H2", "H3"]);
 
 function lineBefore(root: HTMLElement, node: Text, offset: number) {
@@ -221,6 +250,7 @@ export function Editor({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [mention, setMention] = useState<{ query: string; pinned?: boolean } | null>(null);
+  const [emoji, setEmoji] = useState<EmojiMenu | null>(null);
 
   useEffect(() => {
     const el = root.current;
@@ -385,6 +415,51 @@ export function Editor({
       formatted.current = (tag && at?.closest(tag)) || null;
       return;
     }
+  }
+
+  function typeEmoji(input: InputEvent) {
+    const outer = box.current;
+    const found = input.isComposing ? null : readShortcode(root.current);
+    if (!outer || !found) {
+      setEmoji(null);
+      return;
+    }
+    if (found.closed) {
+      setEmoji(null);
+      const char = input.data === ":" && emojiFor(found.name);
+      if (!char) return;
+      selectText(found.node, found.start, found.end);
+      exec("insertText", char);
+      return;
+    }
+    const items = found.name.length >= 2 ? searchEmoji(found.name) : [];
+    const caret = window.getSelection()?.getRangeAt(0).getBoundingClientRect();
+    if (!items.length || !caret) {
+      setEmoji(null);
+      return;
+    }
+    const from = outer.getBoundingClientRect();
+    setEmoji({
+      items,
+      index: 0,
+      top: caret.bottom - from.top + 6,
+      left: Math.max(0, Math.min(caret.left - from.left, from.width - EMOJI_MENU_WIDTH)),
+    });
+  }
+
+  function pickEmoji(item: EmojiMatch) {
+    const found = readShortcode(root.current);
+    setEmoji(null);
+    if (!found) return;
+    selectText(found.node, found.start, found.end);
+    exec("insertText", item.emoji);
+    emit();
+  }
+
+  function submitForm() {
+    const form = root.current?.closest("form");
+    const button = form?.querySelector<HTMLButtonElement>("button[type=submit]");
+    if (form && button && !button.disabled) form.requestSubmit(button);
   }
 
   function applyLink() {
@@ -556,6 +631,7 @@ export function Editor({
         className="rich editor is-empty min-h-16 outline-none"
         onInput={(e) => {
           typeMarkdown(e.nativeEvent as InputEvent);
+          typeEmoji(e.nativeEvent as InputEvent);
           if (mentions) {
             const found = readMention(root.current);
             setMention((open) => (found ? { query: found.query } : open?.pinned ? open : null));
@@ -576,7 +652,9 @@ export function Editor({
           exec("insertHTML", markdownToHtml(text, headings));
           emit();
         }}
+        onFocus={() => void loadEmoji()}
         onClick={(e) => {
+          setEmoji(null);
           const target = e.target;
           if (!(target instanceof HTMLImageElement)) {
             setPicked(null);
@@ -588,16 +666,45 @@ export function Editor({
           window.getSelection()?.addRange(range);
           setPicked(target);
         }}
-        onBlur={() => setPicked(null)}
+        onBlur={() => {
+          setPicked(null);
+          setEmoji(null);
+        }}
         onKeyDown={(e) => {
           setPicked(null);
+          const mod = e.metaKey || e.ctrlKey;
+          if (emoji && !mod && !e.nativeEvent.isComposing) {
+            const count = emoji.items.length;
+            if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+              e.preventDefault();
+              const step = e.key === "ArrowDown" ? 1 : count - 1;
+              setEmoji({ ...emoji, index: (emoji.index + step) % count });
+              return;
+            }
+            if (e.key === "Enter" || e.key === "Tab") {
+              e.preventDefault();
+              const item = emoji.items[emoji.index];
+              if (item) pickEmoji(item);
+              return;
+            }
+            if (e.key === "Escape") {
+              e.preventDefault();
+              setEmoji(null);
+              return;
+            }
+            if (CARET_KEYS.has(e.key)) setEmoji(null);
+          }
           if (e.key === "Escape" && mention) {
             e.preventDefault();
             setMention(null);
             return;
           }
-          const mod = e.metaKey || e.ctrlKey;
           if (!mod) return;
+          if (e.key === "Enter") {
+            e.preventDefault();
+            submitForm();
+            return;
+          }
           const key = e.key.toLowerCase();
           if (e.shiftKey && (e.code === "Digit8" || e.code === "Digit7")) {
             e.preventDefault();
@@ -637,6 +744,29 @@ export function Editor({
               {dragWidth} px
             </span>
           )}
+        </div>
+      )}
+      {emoji && (
+        <div
+          role="listbox"
+          aria-label="Emoji"
+          className="menu absolute z-30 py-1"
+          style={{ top: emoji.top, left: emoji.left, width: EMOJI_MENU_WIDTH }}
+        >
+          {emoji.items.map((item, i) => (
+            <button
+              key={item.name}
+              type="button"
+              role="option"
+              aria-selected={i === emoji.index}
+              className={`menu-item ${i === emoji.index ? "bg-hover text-fg" : ""}`}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => pickEmoji(item)}
+            >
+              <span className="text-base leading-none">{item.emoji}</span>
+              <span className="truncate">:{item.name}:</span>
+            </button>
+          ))}
         </div>
       )}
       {error && <p className="text-xs text-rose-500">{error}</p>}
