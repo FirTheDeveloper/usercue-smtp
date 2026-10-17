@@ -294,6 +294,10 @@
 .rich img {
   @apply my-2 max-h-72 max-w-full rounded-xl;
 }
+.rich img[width] {
+  height: auto;
+  max-height: none;
+}
 .rich h2,
 .rich h3 {
   margin: 1.15em 0 0.35em;
@@ -339,6 +343,12 @@
 .rich ol {
   margin: 0.4em 0;
   padding-left: 1.2rem;
+}
+.rich ul {
+  list-style-type: disc;
+}
+.rich ol {
+  list-style-type: decimal;
 }
 .editor.is-empty:before {
   color: var(--faint);

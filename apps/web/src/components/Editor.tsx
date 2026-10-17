@@ -1,8 +1,26 @@
-import { isEmptyHtml, LIMITS, sanitizeHtml } from "@usercue/shared";
-import { type ReactNode, useEffect, useRef, useState } from "react";
+import { IMAGE_WIDTH, isEmptyHtml, isPostHref, LIMITS, sanitizeHtml } from "@usercue/shared";
+import {
+  type PointerEvent,
+  type ReactNode,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import { uploadImage } from "../lib/api";
 import { usePosts } from "../lib/queries";
-import { Bold, Hash, Heading, Highlight, ImageIcon, Italic, LinkIcon, Underline } from "./icons";
+import {
+  Bold,
+  BulletList,
+  Hash,
+  Heading,
+  Highlight,
+  ImageIcon,
+  Italic,
+  LinkIcon,
+  NumberedList,
+  Underline,
+} from "./icons";
 import { STATUS_DOT } from "./ui";
 
 interface EditorProps {
@@ -14,6 +32,13 @@ interface EditorProps {
   headings?: boolean;
   excludeId?: number;
   autoFocus?: boolean;
+}
+
+interface ImageFrame {
+  top: number;
+  left: number;
+  width: number;
+  height: number;
 }
 
 function exec(command: string, value?: string) {
@@ -43,6 +68,136 @@ function readMention(root: HTMLElement | null) {
   return { node, start: end - query.length - 1, end, query };
 }
 
+function linkHref(value: string) {
+  if (isPostHref(value)) return value;
+  if (/^(?:https?:\/\/|mailto:)\S+$/i.test(value)) return value;
+  if (/^[\w-]+(?:\.[\w-]+)+(?:[/?#]\S*)?$/.test(value)) return `https://${value}`;
+  return null;
+}
+
+function imageSrc(value: string) {
+  return /^(?:https?:\/\/\S+|\/(?:api\/)?uploads\/[\w.-]+)$/i.test(value) ? value : null;
+}
+
+function wrapped(delimiter: string, char: string) {
+  return `${delimiter}([^${char}\\s](?:[^${char}]*[^${char}\\s])?)${delimiter}`;
+}
+
+interface InlineRule {
+  source: string;
+  render: (match: RegExpMatchArray) => string | null;
+}
+
+const INLINE: InlineRule[] = [
+  {
+    source: String.raw`!\[([^\]]*)\]\(([^)\s]+)\)`,
+    render: (m) => {
+      const src = imageSrc(m[2] ?? "");
+      return src ? `<img src="${src}" alt="${m[1] ?? ""}">` : null;
+    },
+  },
+  {
+    source: String.raw`(?<!!)\[([^\]]+)\]\(([^)\s]+)\)`,
+    render: (m) => {
+      const href = linkHref(m[2] ?? "");
+      return href ? `<a href="${href}">${m[1]}</a>` : null;
+    },
+  },
+  { source: wrapped(String.raw`\*\*`, "*"), render: (m) => `<b>${m[1]}</b>` },
+  { source: wrapped("__", "_"), render: (m) => `<u>${m[1]}</u>` },
+  { source: wrapped("==", "="), render: (m) => `<mark>${m[1]}</mark>` },
+  {
+    source: String.raw`(?<![\w*])${wrapped(String.raw`\*`, "*")}(?!\*)`,
+    render: (m) => `<i>${m[1]}</i>`,
+  },
+  { source: String.raw`(?<!\w)${wrapped("_", "_")}(?!\w)`, render: (m) => `<i>${m[1]}</i>` },
+];
+
+const TYPED = INLINE.map((rule) => ({ ...rule, pattern: new RegExp(`(?:${rule.source})$`) }));
+const PASTED = INLINE.map((rule) => ({ ...rule, pattern: new RegExp(rule.source, "g") }));
+const TRIGGERS = new Set(["*", "_", "=", ")"]);
+
+function inlineMarkdown(text: string) {
+  const held: string[] = [];
+  let out = escapeHtml(text);
+  for (const rule of PASTED) {
+    out = out.replace(rule.pattern, (...args) => {
+      const html = rule.render(args.slice(0, -2) as RegExpMatchArray);
+      if (!html) return args[0];
+      held.push(html);
+      return `\uE000${held.length - 1}\uE001`;
+    });
+  }
+  return out.replace(/\uE000(\d+)\uE001/g, (_, i) => held[Number(i)] ?? "");
+}
+
+const MARKDOWN_HINT = new RegExp(
+  [
+    String.raw`^\s*(?:[-*+]|\d+[.)])\s`,
+    String.raw`^#{1,3}\s`,
+    ...INLINE.map((rule) => rule.source),
+  ].join("|"),
+  "m",
+);
+
+function markdownToHtml(text: string, headings: boolean) {
+  const lines = text.replace(/\r\n?/g, "\n").replace(/\n+$/, "").split("\n");
+  const out: string[] = [];
+  let list: "ul" | "ol" | null = null;
+  for (const line of lines) {
+    const item = /^\s*(?:([-*+])|\d+[.)])\s+(.*)$/.exec(line);
+    const kind = item ? (item[1] ? "ul" : "ol") : null;
+    if (list && kind !== list) {
+      out.push(`</${list}>`);
+      list = null;
+    }
+    if (item && kind) {
+      if (!list) out.push(`<${kind}>`);
+      list = kind;
+      out.push(`<li>${inlineMarkdown(item[2] ?? "")}</li>`);
+      continue;
+    }
+    const heading = headings ? /^(#{1,3})\s+(.*)$/.exec(line) : null;
+    if (heading) {
+      const tag = heading[1]?.length === 3 ? "h3" : "h2";
+      out.push(`<${tag}>${inlineMarkdown(heading[2] ?? "")}</${tag}>`);
+    } else if (lines.length === 1) {
+      out.push(inlineMarkdown(line));
+    } else {
+      out.push(line.trim() ? `<div>${inlineMarkdown(line)}</div>` : "<div><br></div>");
+    }
+  }
+  if (list) out.push(`</${list}>`);
+  return sanitizeHtml(out.join(""));
+}
+
+const BLOCKS = new Set(["DIV", "P", "LI", "UL", "OL", "H2", "H3"]);
+
+function lineBefore(root: HTMLElement, node: Text, offset: number) {
+  let text = node.data.slice(0, offset);
+  let cur: Node = node;
+  while (cur !== root) {
+    for (let prev = cur.previousSibling; prev; prev = prev.previousSibling) {
+      if (prev.nodeName === "BR" || BLOCKS.has(prev.nodeName)) return text;
+      text = (prev.textContent ?? "") + text;
+    }
+    const parent = cur.parentNode;
+    if (!parent || parent === root || BLOCKS.has(parent.nodeName)) return text;
+    cur = parent;
+  }
+  return text;
+}
+
+function selectText(node: Text, start: number, end: number) {
+  const sel = window.getSelection();
+  if (!sel) return;
+  const range = document.createRange();
+  range.setStart(node, start);
+  range.setEnd(node, end);
+  sel.removeAllRanges();
+  sel.addRange(range);
+}
+
 export function Editor({
   value,
   onChange,
@@ -56,6 +211,11 @@ export function Editor({
   const root = useRef<HTMLDivElement>(null);
   const file = useRef<HTMLInputElement>(null);
   const saved = useRef<Range | null>(null);
+  const formatted = useRef<Element | null>(null);
+  const box = useRef<HTMLDivElement>(null);
+  const [picked, setPicked] = useState<HTMLImageElement | null>(null);
+  const [frame, setFrame] = useState<ImageFrame | null>(null);
+  const [dragWidth, setDragWidth] = useState<number | null>(null);
   const [linking, setLinking] = useState(false);
   const [href, setHref] = useState("https://");
   const [busy, setBusy] = useState(false);
@@ -71,6 +231,92 @@ export function Editor({
   useEffect(() => {
     if (autoFocus) root.current?.focus();
   }, [autoFocus]);
+
+  useEffect(() => {
+    const el = root.current;
+    if (!el) return;
+    const onBeforeInput = (e: InputEvent) => {
+      const target = formatted.current;
+      formatted.current = null;
+      const sel = window.getSelection();
+      if (!target?.isConnected || e.inputType !== "insertText" || !e.data) return;
+      if (!sel?.rangeCount || !sel.isCollapsed) return;
+      const caret = sel.getRangeAt(0);
+      if (!target.contains(caret.startContainer)) return;
+      const rest = document.createRange();
+      rest.setStart(caret.startContainer, caret.startOffset);
+      rest.setEndAfter(target);
+      if (rest.toString() !== "") return;
+      e.preventDefault();
+      rest.selectNode(target);
+      sel.removeAllRanges();
+      sel.addRange(rest);
+      exec("insertHTML", target.outerHTML + escapeHtml(e.data));
+    };
+    el.addEventListener("beforeinput", onBeforeInput);
+    return () => el.removeEventListener("beforeinput", onBeforeInput);
+  }, []);
+
+  useLayoutEffect(() => {
+    const img = picked;
+    const outer = box.current;
+    if (!img || !outer) {
+      setFrame(null);
+      return;
+    }
+    const place = () => {
+      if (!img.isConnected) {
+        setPicked(null);
+        return;
+      }
+      const from = outer.getBoundingClientRect();
+      const rect = img.getBoundingClientRect();
+      setFrame({
+        top: rect.top - from.top,
+        left: rect.left - from.left,
+        width: rect.width,
+        height: rect.height,
+      });
+    };
+    place();
+    const observer = new ResizeObserver(place);
+    observer.observe(img);
+    observer.observe(outer);
+    window.addEventListener("resize", place);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", place);
+    };
+  }, [picked]);
+
+  function resizeImage(e: PointerEvent<HTMLButtonElement>) {
+    const img = picked;
+    const el = root.current;
+    if (!img || !el) return;
+    e.preventDefault();
+    const handle = e.currentTarget;
+    handle.setPointerCapture(e.pointerId);
+    const startX = e.clientX;
+    const startWidth = img.getBoundingClientRect().width;
+    const limit = Math.min(IMAGE_WIDTH.max, el.clientWidth);
+    const move = (next: globalThis.PointerEvent) => {
+      const width = Math.round(
+        Math.min(limit, Math.max(IMAGE_WIDTH.min, startWidth + next.clientX - startX)),
+      );
+      img.setAttribute("width", String(width));
+      setDragWidth(width);
+    };
+    const end = () => {
+      handle.removeEventListener("pointermove", move);
+      handle.removeEventListener("pointerup", end);
+      handle.removeEventListener("pointercancel", end);
+      setDragWidth(null);
+      emit();
+    };
+    handle.addEventListener("pointermove", move);
+    handle.addEventListener("pointerup", end);
+    handle.addEventListener("pointercancel", end);
+  }
 
   function emit() {
     const el = root.current;
@@ -97,6 +343,48 @@ export function Editor({
     root.current?.focus();
     exec(command, arg);
     emit();
+  }
+
+  function typeMarkdown(input: InputEvent) {
+    const el = root.current;
+    const sel = window.getSelection();
+    if (!el || input.isComposing || input.inputType !== "insertText" || !input.data) return;
+    if (!sel?.rangeCount || !sel.isCollapsed) return;
+    const { startContainer, startOffset: end } = sel.getRangeAt(0);
+    if (startContainer.nodeType !== Node.TEXT_NODE || !el.contains(startContainer)) return;
+    const node = startContainer as Text;
+
+    if (input.data === " ") {
+      const line = lineBefore(el, node, end).replace(/\u00a0/g, " ");
+      if (line.length > end) return;
+      let command: [string, string?] | null = null;
+      if (/^[-*+] $/.test(line)) command = ["insertUnorderedList"];
+      else if (/^\d+[.)] $/.test(line)) command = ["insertOrderedList"];
+      else if (headings && /^#{1,3} $/.test(line)) {
+        command = ["formatBlock", line.length === 4 ? "h3" : "h2"];
+      }
+      if (!command) return;
+      if (command[0] !== "formatBlock" && document.queryCommandState(command[0])) return;
+      selectText(node, end - line.length, end);
+      exec("delete");
+      exec(...command);
+      return;
+    }
+
+    if (!TRIGGERS.has(input.data)) return;
+    const before = node.data.slice(0, end);
+    for (const rule of TYPED) {
+      const match = rule.pattern.exec(before);
+      if (!match) continue;
+      const html = rule.render(match.map((part) => part && escapeHtml(part)) as RegExpMatchArray);
+      if (!html) continue;
+      selectText(node, end - match[0].length, end);
+      exec("insertHTML", html);
+      const tag = /^<(b|i|u|mark|a)[\s>]/.exec(html)?.[1];
+      const at = window.getSelection()?.anchorNode?.parentElement;
+      formatted.current = (tag && at?.closest(tag)) || null;
+      return;
+    }
   }
 
   function applyLink() {
@@ -146,7 +434,7 @@ export function Editor({
   }
 
   return (
-    <div className="relative flex flex-col gap-2">
+    <div ref={box} className="relative flex flex-col gap-2">
       <div className="flex flex-wrap items-center gap-0.5">
         {headings && (
           <Tool
@@ -181,6 +469,12 @@ export function Editor({
           }}
         >
           <Highlight />
+        </Tool>
+        <Tool label="Bulleted list" keys="⌘⇧8" onClick={() => run("insertUnorderedList")}>
+          <BulletList />
+        </Tool>
+        <Tool label="Numbered list" keys="⌘⇧7" onClick={() => run("insertOrderedList")}>
+          <NumberedList />
         </Tool>
         <Tool
           label="Link"
@@ -260,7 +554,8 @@ export function Editor({
         contentEditable
         data-placeholder={placeholder}
         className="rich editor is-empty min-h-16 outline-none"
-        onInput={() => {
+        onInput={(e) => {
+          typeMarkdown(e.nativeEvent as InputEvent);
           if (mentions) {
             const found = readMention(root.current);
             setMention((open) => (found ? { query: found.query } : open?.pinned ? open : null));
@@ -269,12 +564,33 @@ export function Editor({
         }}
         onPaste={(e) => {
           const image = [...e.clipboardData.files].find((f) => f.type.startsWith("image/"));
-          if (!image) return;
+          if (image) {
+            e.preventDefault();
+            remember();
+            void insertFile(image);
+            return;
+          }
+          const text = e.clipboardData.getData("text/plain");
+          if (!MARKDOWN_HINT.test(text)) return;
           e.preventDefault();
-          remember();
-          void insertFile(image);
+          exec("insertHTML", markdownToHtml(text, headings));
+          emit();
         }}
+        onClick={(e) => {
+          const target = e.target;
+          if (!(target instanceof HTMLImageElement)) {
+            setPicked(null);
+            return;
+          }
+          const range = document.createRange();
+          range.selectNode(target);
+          window.getSelection()?.removeAllRanges();
+          window.getSelection()?.addRange(range);
+          setPicked(target);
+        }}
+        onBlur={() => setPicked(null)}
         onKeyDown={(e) => {
+          setPicked(null);
           if (e.key === "Escape" && mention) {
             e.preventDefault();
             setMention(null);
@@ -283,7 +599,10 @@ export function Editor({
           const mod = e.metaKey || e.ctrlKey;
           if (!mod) return;
           const key = e.key.toLowerCase();
-          if (key === "b") {
+          if (e.shiftKey && (e.code === "Digit8" || e.code === "Digit7")) {
+            e.preventDefault();
+            run(e.code === "Digit8" ? "insertUnorderedList" : "insertOrderedList");
+          } else if (key === "b") {
             e.preventDefault();
             run("bold");
           } else if (key === "i") {
@@ -299,6 +618,27 @@ export function Editor({
           }
         }}
       />
+      {picked && frame && (
+        <div className="pointer-events-none absolute rounded-xl ring-2 ring-accent" style={frame}>
+          <button
+            type="button"
+            aria-label="Resize image"
+            title="Drag to resize, double-click to reset"
+            className="pointer-events-auto absolute top-1/2 -right-1.5 h-8 w-3 -translate-y-1/2 cursor-ew-resize touch-none rounded-full border-2 border-accent bg-surface shadow-sm"
+            onMouseDown={(e) => e.preventDefault()}
+            onPointerDown={resizeImage}
+            onDoubleClick={() => {
+              picked.removeAttribute("width");
+              emit();
+            }}
+          />
+          {dragWidth !== null && (
+            <span className="absolute top-2 left-2 rounded-md bg-black/70 px-1.5 py-0.5 text-[11px] text-white tabular-nums">
+              {dragWidth} px
+            </span>
+          )}
+        </div>
+      )}
       {error && <p className="text-xs text-rose-500">{error}</p>}
     </div>
   );

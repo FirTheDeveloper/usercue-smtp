@@ -53,7 +53,7 @@ export function PostForm({ board, defaultOpen = false }: { board: string; defaul
       />
       {open && (
         <div className="flex animate-rise flex-col gap-3 px-4 pb-3">
-          <Editor value={body} onChange={setBody} maxLength={LIMITS.body} />
+          <Editor value={body} onChange={setBody} maxLength={LIMITS.body} mentions />
           {guest && Boolean(methods?.providers.length) && (
             <div className="flex flex-col gap-2 border-t pt-3">
               <OAuthButtons next="board" />

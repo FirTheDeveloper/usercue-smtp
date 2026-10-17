@@ -37,7 +37,7 @@ export async function sendInviteEmail(
     body: JSON.stringify({
       from: creds.from,
       to,
-      subject: "You're invited to a Usercue workspace",
+      subject: "You're invited to a UserCue workspace",
       html: `<div style="font-family:ui-sans-serif,system-ui,sans-serif;max-width:440px;margin:0 auto;padding:32px 8px;color:#18181b">
   <p style="font-size:16px;font-weight:600;margin:0 0 8px">Join the workspace</p>
   <p style="font-size:14px;line-height:1.5;color:#52525b;margin:0 0 20px">
