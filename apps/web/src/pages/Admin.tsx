@@ -158,8 +158,8 @@ function Sidebar({
         />
 
         <Link
-          href="/admin"
-          aria-label="UserCue"
+          href="/"
+          aria-label="Usercue"
           className="relative mb-5 flex justify-center pt-1"
         >
           <span className="scale-125">
@@ -442,8 +442,8 @@ function RequestList({
   const shown = filter.status
     ? counts?.[filter.status]
     : counts
-    ? Object.values(counts).reduce((a, b) => a + b, 0)
-    : undefined;
+      ? Object.values(counts).reduce((a, b) => a + b, 0)
+      : undefined;
 
   return (
     <section
@@ -518,7 +518,7 @@ export function AdminShell({
         >
           <Menu />
         </button>
-        <Link href="/admin" className="flex items-center">
+        <Link href="/" className="flex items-center">
           <Logo compact wordmark={false} />
         </Link>
       </header>
