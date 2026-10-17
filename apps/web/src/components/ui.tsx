@@ -156,20 +156,25 @@ export function RoleBadge({
     setFailed(false);
   }, [iconUrl]);
   const chip = {
-    xs: "h-3.5 gap-0.5 text-[9px]",
-    sm: "h-4 gap-1 text-[10px]",
-    md: "h-4 gap-1 text-[10px]",
+    xs: "h-3.5 gap-0.5",
+    sm: "h-4 gap-1",
+    md: "h-4 gap-1",
+  }[size];
+  const iconSize = {
+    xs: "size-3.5",
+    sm: "size-4",
+    md: "size-4",
   }[size];
 
   return (
-    <span className={`inline-flex max-w-full items-center ${chip}`}>
+    <span className={`inline-flex min-w-0 shrink-0 items-center ${chip}`}>
       {iconUrl && !failed && (
         <img
           src={iconUrl}
           alt=""
           title={name}
           onError={() => setFailed(true)}
-          className={`size-full shrink-0 object-cover`}
+          className={`shrink-0 ${iconSize} object-cover`}
         />
       )}
     </span>
