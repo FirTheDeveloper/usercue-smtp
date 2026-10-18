@@ -50,6 +50,13 @@ if (env.production) {
     return c.html(injectMeta(base, tags), 200, { "Cache-Control": "public, max-age=60" });
   });
 
+  for (const path of ["/sw.js", "/registerSW.js", "/index.html"]) {
+    app.use(path, async (c, next) => {
+      await next();
+      c.header("Cache-Control", "no-cache");
+    });
+  }
+
   app.use("*", serveStatic({ root, precompressed: true }));
   app.get("*", page);
 }
