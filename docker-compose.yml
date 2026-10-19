@@ -15,7 +15,7 @@ services:
       retries: 20
 
   app:
-    image: ghcr.io/paddlewheel-inc/usercue:latest
+    image: ${USERCUE_IMAGE:-ghcr.io/paddlewheel-inc/usercue:latest}
     pull_policy: always
     restart: unless-stopped
     ports:

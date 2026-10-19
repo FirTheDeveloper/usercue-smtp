@@ -187,6 +187,7 @@ else
 # if you lose it, those stored values become unreadable.
 PORT=$PORT
 PUBLIC_URL=$PUBLIC_URL
+USERCUE_IMAGE=${USERCUE_IMAGE:-ghcr.io/paddlewheel-inc/usercue:latest}
 COOKIE_SECURE=$COOKIE_SECURE
 POSTGRES_PASSWORD=$(rand)
 SECRET_KEY=$(rand)
