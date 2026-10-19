@@ -103,20 +103,6 @@ for bin in curl git; do
 done
 ok "curl and git are installed"
 
-# ---------- swap (builds get OOM-killed on small servers) ----------
-mem_kb=$(awk '/MemTotal/ {print $2}' /proc/meminfo)
-swap_kb=$(awk '/SwapTotal/ {print $2}' /proc/meminfo)
-if [ "$mem_kb" -lt 2000000 ] && [ "$swap_kb" -eq 0 ]; then
-  step "Low memory (${mem_kb} kB RAM, no swap): adding a 2 GB swap file so the build isn't killed"
-  if [ ! -e /swapfile ]; then
-    fallocate -l 2G /swapfile 2>/dev/null || dd if=/dev/zero of=/swapfile bs=1M count=2048 status=none
-    chmod 600 /swapfile
-    mkswap /swapfile >/dev/null
-  fi
-  swapon /swapfile 2>/dev/null || warn "Could not enable swap (some VPS types forbid it). The build may fail on low RAM."
-  grep -q '^/swapfile' /etc/fstab || echo '/swapfile none swap sw 0 0' >> /etc/fstab
-fi
-
 # ---------- docker ----------
 step "Checking Docker"
 if ! command -v docker >/dev/null; then
@@ -258,8 +244,9 @@ if command -v ufw >/dev/null && ufw status 2>/dev/null | grep -q '^Status: activ
 fi
 
 # ---------- build & start ----------
-step "Building and starting UserCue (first build can take several minutes)"
-docker compose up -d --build
+step "Pulling UserCue and starting it"
+docker compose pull
+docker compose up -d --remove-orphans
 
 step "Waiting for UserCue to come up"
 ready=0
