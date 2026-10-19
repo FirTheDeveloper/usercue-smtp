@@ -257,7 +257,7 @@ function PublishedEntry({
               </button>
               <button
                 type="button"
-                className="btn-quiet h-7 w-7"
+                className="btn-quiet size-7 p-0"
                 aria-label="Delete"
                 disabled={deleting}
                 onClick={onDelete}

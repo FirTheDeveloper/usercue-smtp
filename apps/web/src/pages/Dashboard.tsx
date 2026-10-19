@@ -146,17 +146,17 @@ function HeartLane({ counts }: { counts: Record<Status, number> }) {
 function Stage({ posts }: { posts: Post[] }) {
   return (
     <section className="flex h-full flex-col gap-3">
-      <div className="flex h-14 items-start justify-between gap-3">
-        <div>
+      <div className="flex min-h-14 flex-col gap-1">
+        <div className="flex items-center justify-between gap-3">
           <h2 className="text-[15px] font-semibold tracking-tight">On stage</h2>
-          <p className="mt-0.5 text-[12px] text-muted">Whatever you’re actually building.</p>
+          <Link
+            href="/admin/requests?status=in_progress"
+            className="shrink-0 text-[12px] font-medium whitespace-nowrap text-accent-text hover:text-accent"
+          >
+            See the lot →
+          </Link>
         </div>
-        <Link
-          href="/admin/requests?status=in_progress"
-          className="text-[12px] font-medium text-accent-text hover:text-accent"
-        >
-          See the lot →
-        </Link>
+        <p className="text-[12px] text-muted">Whatever you’re actually building.</p>
       </div>
       <div className="card flex min-h-44 flex-1 flex-col p-2">
         {posts.length === 0 ? (
@@ -202,17 +202,17 @@ function NewFaces({
 }) {
   return (
     <section className="flex h-full flex-col gap-3">
-      <div className="flex h-14 items-start justify-between gap-3">
-        <div>
+      <div className="flex min-h-14 flex-col gap-1">
+        <div className="flex items-center justify-between gap-3">
           <h2 className="text-[15px] font-semibold tracking-tight">New faces</h2>
-          <p className="mt-0.5 text-[12px] text-muted">Folks who just pulled up a chair.</p>
+          <Link
+            href="/admin/settings/users"
+            className="shrink-0 text-[12px] font-medium whitespace-nowrap text-accent-text hover:text-accent"
+          >
+            Everyone →
+          </Link>
         </div>
-        <Link
-          href="/admin/settings/users"
-          className="text-[12px] font-medium text-accent-text hover:text-accent"
-        >
-          Everyone →
-        </Link>
+        <p className="text-[12px] text-muted">Folks who just pulled up a chair.</p>
       </div>
       <div className="card flex min-h-44 flex-1 flex-col p-2">
         {people.length === 0 ? (
