@@ -1,5 +1,6 @@
 import { vValidator } from "@hono/valibot-validator";
 import {
+  CHANGELOG_LIMITS,
   CHANGELOG_REACTION_IDS,
   type ChangelogReaction,
   isEmptyHtml,
@@ -25,16 +26,32 @@ const commentParam = v.object({
 
 const postId = v.nullable(v.pipe(v.number(), v.integer(), v.minValue(1)));
 
+const sectionInput = v.object({
+  label: v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(CHANGELOG_LIMITS.sectionLabel)),
+  body: v.optional(v.pipe(v.string(), v.maxLength(LIMITS.body)), ""),
+});
+
+const contributorIds = v.pipe(
+  v.array(v.pipe(v.number(), v.integer(), v.minValue(1))),
+  v.maxLength(CHANGELOG_LIMITS.contributors),
+);
+
+const sectionsInput = v.pipe(v.array(sectionInput), v.maxLength(CHANGELOG_LIMITS.sections));
+
 const entryBody = v.object({
   title: v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(LIMITS.title)),
   body: v.optional(v.pipe(v.string(), v.maxLength(LIMITS.body)), ""),
   postId: v.optional(postId),
+  sections: v.optional(sectionsInput, []),
+  contributorIds: v.optional(contributorIds, []),
 });
 
 const entryPatch = v.object({
   title: v.optional(v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(LIMITS.title))),
   body: v.optional(v.pipe(v.string(), v.maxLength(LIMITS.body))),
   postId: v.optional(postId),
+  sections: v.optional(sectionsInput),
+  contributorIds: v.optional(contributorIds),
 });
 
 const commentBody = v.object({
@@ -80,6 +97,28 @@ interface ReactionRow {
   entry_id: number;
   reaction: string;
   user_id: number;
+}
+
+interface SectionRow {
+  id: number;
+  entry_id: number;
+  label: string;
+  body: string;
+  position: number;
+}
+
+interface ContributorRow {
+  entry_id: number;
+  user_id: number;
+  name: string;
+  avatar_url: string | null;
+  position: number;
+}
+
+interface PersonRow {
+  id: number;
+  name: string;
+  avatar_url: string | null;
 }
 
 const ENTRY_SELECT = `
@@ -156,6 +195,38 @@ const addReaction = db.query(
    ON CONFLICT (entry_id, user_id, reaction) DO NOTHING`,
 );
 
+const listAllSections = db.query<SectionRow>(
+  "SELECT id, entry_id, label, body, position FROM changelog_sections ORDER BY entry_id, position, id",
+);
+const sectionsFor = db.query<SectionRow>(
+  "SELECT id, entry_id, label, body, position FROM changelog_sections WHERE entry_id = ? ORDER BY position, id",
+);
+const clearSections = db.query("DELETE FROM changelog_sections WHERE entry_id = ?");
+const insertSection = db.query(
+  "INSERT INTO changelog_sections (entry_id, label, body, position) VALUES (?, ?, ?, ?)",
+);
+const listAllContributors = db.query<ContributorRow>(
+  `SELECT c.entry_id, c.position, u.id AS user_id, u.name, u.avatar_url
+   FROM changelog_contributors c
+   JOIN users u ON u.id = c.user_id
+   ORDER BY c.entry_id, c.position, u.id`,
+);
+const contributorsFor = db.query<ContributorRow>(
+  `SELECT c.entry_id, c.position, u.id AS user_id, u.name, u.avatar_url
+   FROM changelog_contributors c
+   JOIN users u ON u.id = c.user_id
+   WHERE c.entry_id = ?
+   ORDER BY c.position, u.id`,
+);
+const clearContributors = db.query("DELETE FROM changelog_contributors WHERE entry_id = ?");
+const insertContributor = db.query(
+  "INSERT INTO changelog_contributors (entry_id, user_id, position) VALUES (?, ?, ?)",
+);
+const findUser = db.query<{ id: number }>("SELECT id FROM users WHERE id = ?");
+const listPeople = db.query<PersonRow>(
+  "SELECT id, name, avatar_url FROM users WHERE suspended = 0 ORDER BY lower(name), id",
+);
+
 function roleBadge(name: string | null, icon: string | null, permissions: string | null) {
   if (!name || !hasPermission(parsePermissions(permissions), "dashboard")) return null;
   return { name, iconUrl: icon || null };
@@ -184,10 +255,34 @@ function packReactions(rows: ReactionRow[], userId: number | null, enabled: bool
   });
 }
 
+function groupByEntry<T extends { entry_id: number }>(rows: T[]) {
+  const map = new Map<number, T[]>();
+  for (const row of rows) {
+    const list = map.get(row.entry_id) ?? [];
+    list.push(row);
+    map.set(row.entry_id, list);
+  }
+  return map;
+}
+
+function serializeSections(rows: SectionRow[]) {
+  return rows.map((row) => ({ id: row.id, label: row.label, body: row.body }));
+}
+
+function serializeContributors(rows: ContributorRow[]) {
+  return rows.map((row) => ({
+    id: row.user_id,
+    name: row.name,
+    avatarUrl: row.avatar_url || null,
+  }));
+}
+
 function serializeEntry(
   row: EntryRow,
   reactions: { id: ChangelogReaction; count: number; mine: boolean }[],
   commentsOn: boolean,
+  sections: SectionRow[],
+  contributors: ContributorRow[],
 ) {
   return {
     id: row.id,
@@ -198,11 +293,50 @@ function serializeEntry(
     authorRole: roleBadge(row.author_role_name, row.author_role_icon, row.author_role_perms),
     commentCount: commentsOn ? row.comment_count : 0,
     reactions,
+    sections: serializeSections(sections),
+    contributors: serializeContributors(contributors),
     linkedPost:
       row.post_id && row.linked_title ? { id: row.post_id, title: row.linked_title } : null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
+}
+
+function cleanSections(sections: { label: string; body: string }[]) {
+  return sections.flatMap((section) => {
+    const body = cleanBody(section.body);
+    return body ? [{ label: section.label, body }] : [];
+  });
+}
+
+async function resolveContributors(ids: number[]) {
+  const unique: number[] = [];
+  for (const id of ids) {
+    if (!unique.includes(id)) unique.push(id);
+  }
+  for (const id of unique) {
+    if (!(await findUser.get(id))) return undefined;
+  }
+  return unique;
+}
+
+async function writeExtras(
+  entryId: number,
+  sections: { label: string; body: string }[] | undefined,
+  contributorIds: number[] | undefined,
+) {
+  if (sections) {
+    await clearSections.run(entryId);
+    for (const [i, section] of sections.entries()) {
+      await insertSection.run(entryId, section.label, section.body, i);
+    }
+  }
+  if (contributorIds) {
+    await clearContributors.run(entryId);
+    for (const [i, userId] of contributorIds.entries()) {
+      await insertContributor.run(entryId, userId, i);
+    }
+  }
 }
 
 async function linkedPostId(postId: number | null | undefined) {
@@ -242,12 +376,19 @@ function cdata(value: string) {
   return `<![CDATA[${value.replaceAll("]]>", "]]]]><![CDATA[>")}]]>`;
 }
 
-function feedXml(origin: string, entries: EntryRow[]) {
+function feedXml(origin: string, entries: EntryRow[], sections: Map<number, SectionRow[]>) {
   const items = entries
     .slice(0, 50)
     .map((entry) => {
       const link = `${origin}/changelog/${entry.id}`;
       const when = new Date(entry.created_at * 1000).toUTCString();
+      const parts = [entry.body];
+      for (const section of sections.get(entry.id) ?? []) {
+        if (!section.body) continue;
+        const label = section.label.replaceAll("<", "").replaceAll(">", "");
+        parts.push(`<h3>${label}</h3>${section.body}`);
+      }
+      const html = parts.filter(Boolean).join("") || entry.title;
       return [
         "<item>",
         `<title>${xmlEscape(entry.title)}</title>`,
@@ -255,7 +396,7 @@ function feedXml(origin: string, entries: EntryRow[]) {
         `<guid isPermaLink="true">${xmlEscape(link)}</guid>`,
         `<pubDate>${when}</pubDate>`,
         `<dc:creator>${xmlEscape(entry.author_name)}</dc:creator>`,
-        `<description>${cdata(entry.body || entry.title)}</description>`,
+        `<description>${cdata(html)}</description>`,
         "</item>",
       ].join("");
     })
@@ -282,7 +423,13 @@ async function loadEntry(
   const row = await findEntry.get(id);
   if (!row) return undefined;
   const reactions = packReactions(await reactionsFor.all(id), userId, reactionsOn);
-  return serializeEntry(row, reactions, commentsOn);
+  return serializeEntry(
+    row,
+    reactions,
+    commentsOn,
+    await sectionsFor.all(id),
+    await contributorsFor.all(id),
+  );
 }
 
 export const changelog = new Hono<AppEnv>()
@@ -290,7 +437,7 @@ export const changelog = new Hono<AppEnv>()
     const flags = await changelogFlags();
     if (!flags.enabled) return c.text("Not found", 404);
     const origin = publicOrigin(c);
-    const xml = feedXml(origin, await listEntries.all());
+    const xml = feedXml(origin, await listEntries.all(), groupByEntry(await listAllSections.all()));
     return c.body(xml, 200, {
       "Content-Type": "application/rss+xml; charset=utf-8",
       "Cache-Control": "public, max-age=120",
@@ -320,12 +467,9 @@ export const changelog = new Hono<AppEnv>()
 
     const rows = await listEntries.all();
     const reactions = flags.reactions ? await listReactions.all() : [];
-    const byEntry = new Map<number, ReactionRow[]>();
-    for (const row of reactions) {
-      const list = byEntry.get(row.entry_id) ?? [];
-      list.push(row);
-      byEntry.set(row.entry_id, list);
-    }
+    const byEntry = groupByEntry(reactions);
+    const sections = groupByEntry(await listAllSections.all());
+    const contributors = groupByEntry(await listAllContributors.all());
     return c.json({
       ...meta,
       entries: rows.map((row) =>
@@ -333,18 +477,39 @@ export const changelog = new Hono<AppEnv>()
           row,
           packReactions(byEntry.get(row.id) ?? [], user?.id ?? null, flags.reactions),
           flags.comments,
+          sections.get(row.id) ?? [],
+          contributors.get(row.id) ?? [],
         ),
       ),
+    });
+  })
+
+  .get("/people", requireTeam, async (c) => {
+    const people = await listPeople.all();
+    return c.json({
+      people: people.map((person) => ({
+        id: person.id,
+        name: person.name,
+        avatarUrl: person.avatar_url || null,
+      })),
     });
   })
 
   .post("/", requireTeam, rateLimit(20, 60), vValidator("json", entryBody), async (c) => {
     const user = c.get("user");
     if (!user) return c.json({ error: "Unauthorized" }, 401);
-    const { title, body, postId } = c.req.valid("json");
+    const { title, body, postId, sections, contributorIds: credits } = c.req.valid("json");
     const linked = await linkedPostId(postId);
     if (linked === undefined) return c.json({ error: "That suggestion was not found." }, 400);
-    const created = await insertEntry.get(title, cleanBody(body), user.id, user.name, linked);
+    const cleaned = cleanSections(sections);
+    const people = await resolveContributors(credits);
+    if (!people) return c.json({ error: "One of those people is no longer here." }, 400);
+    const created = await db.transaction(async () => {
+      const row = await insertEntry.get(title, cleanBody(body), user.id, user.name, linked);
+      if (!row) return undefined;
+      await writeExtras(row.id, cleaned, people);
+      return row;
+    });
     if (!created) return c.json({ error: "Could not publish that update." }, 500);
     const flags = await changelogFlags();
     const entry = await loadEntry(created.id, user.id, flags.reactions, flags.comments);
@@ -385,15 +550,32 @@ export const changelog = new Hono<AppEnv>()
       const current = await findEntry.get(id);
       if (!current) return c.json({ error: "Not found" }, 404);
       const patch = c.req.valid("json");
-      if (patch.title === undefined && patch.body === undefined && patch.postId === undefined) {
+      if (
+        patch.title === undefined &&
+        patch.body === undefined &&
+        patch.postId === undefined &&
+        patch.sections === undefined &&
+        patch.contributorIds === undefined
+      ) {
         return c.json({ error: "Nothing to update." }, 400);
       }
       const linked =
         patch.postId === undefined ? current.post_id : await linkedPostId(patch.postId);
       if (linked === undefined) return c.json({ error: "That suggestion was not found." }, 400);
+      const cleaned = patch.sections === undefined ? undefined : cleanSections(patch.sections);
+      const people =
+        patch.contributorIds === undefined
+          ? undefined
+          : await resolveContributors(patch.contributorIds);
+      if (patch.contributorIds !== undefined && !people) {
+        return c.json({ error: "One of those people is no longer here." }, 400);
+      }
       const title = patch.title ?? current.title;
       const body = patch.body === undefined ? current.body : cleanBody(patch.body);
-      await updateEntry.run(title, body, linked, id);
+      await db.transaction(async () => {
+        await updateEntry.run(title, body, linked, id);
+        await writeExtras(id, cleaned, people);
+      });
       const flags = await changelogFlags();
       const entry = await loadEntry(id, c.get("user")?.id ?? null, flags.reactions, flags.comments);
       if (!entry) return c.json({ error: "Not found" }, 404);

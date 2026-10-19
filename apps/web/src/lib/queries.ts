@@ -165,11 +165,18 @@ export const useChangelogEntry = (id: number | undefined) =>
     enabled: id !== undefined,
   });
 
+export interface ChangelogDraft {
+  title: string;
+  body: string;
+  postId?: number | null;
+  sections: { label: string; body: string }[];
+  contributorIds: number[];
+}
+
 export function useCreateChangelogEntry() {
   const invalidate = useInvalidateChangelog();
   return useMutation({
-    mutationFn: (body: { title: string; body: string; postId?: number | null }) =>
-      unwrap(api.changelog.$post({ json: body })),
+    mutationFn: (body: ChangelogDraft) => unwrap(api.changelog.$post({ json: body })),
     onSuccess: invalidate,
   });
 }
@@ -177,11 +184,18 @@ export function useCreateChangelogEntry() {
 export function useUpdateChangelogEntry(id: number) {
   const invalidate = useInvalidateChangelog();
   return useMutation({
-    mutationFn: (body: { title?: string; body?: string; postId?: number | null }) =>
+    mutationFn: (body: ChangelogDraft) =>
       unwrap(api.changelog[":id"].$patch({ param: { id: String(id) }, json: body })),
     onSuccess: invalidate,
   });
 }
+
+export const useChangelogPeople = (enabled = true) =>
+  useQuery({
+    queryKey: ["changelog-people"],
+    queryFn: () => unwrap(api.changelog.people.$get()),
+    enabled,
+  });
 
 export function useDeleteChangelogEntry(id: number) {
   const invalidate = useInvalidateChangelog();

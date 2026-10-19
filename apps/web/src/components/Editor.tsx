@@ -251,6 +251,16 @@ export function Editor({
   const [error, setError] = useState<string | null>(null);
   const [mention, setMention] = useState<{ query: string; pinned?: boolean } | null>(null);
   const [emoji, setEmoji] = useState<EmojiMenu | null>(null);
+  const filled = useRef(false);
+
+  useLayoutEffect(() => {
+    if (filled.current) return;
+    filled.current = true;
+    const el = root.current;
+    if (!el || value === "") return;
+    el.innerHTML = sanitizeHtml(value);
+    el.classList.toggle("is-empty", isEmptyHtml(el.innerHTML));
+  }, [value]);
 
   useEffect(() => {
     const el = root.current;

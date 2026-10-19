@@ -87,6 +87,14 @@ export const CHANGELOG_REACTIONS: { id: ChangelogReaction; label: string; emoji:
   { id: "rocket", label: "Ship", emoji: "🚀" },
 ];
 
+export const CHANGELOG_SECTIONS = ["Changed", "Fixed", "Removed"] as const;
+
+export const CHANGELOG_LIMITS = {
+  sections: 24,
+  sectionLabel: 40,
+  contributors: 20,
+} as const;
+
 export function isHexColor(value: string): boolean {
   return /^#[0-9a-fA-F]{6}$/.test(value.trim());
 }

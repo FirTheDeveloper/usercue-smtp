@@ -1,19 +1,38 @@
-import { CHANGELOG_REACTIONS, type ChangelogReaction, isEmptyHtml, LIMITS } from "@usercue/shared";
+import {
+  CHANGELOG_LIMITS,
+  CHANGELOG_REACTIONS,
+  CHANGELOG_SECTIONS,
+  type ChangelogReaction,
+  isEmptyHtml,
+  LIMITS,
+  stripHtml,
+} from "@usercue/shared";
 import { type FormEvent, type ReactNode, useState } from "react";
 import { Link, useLocation, useParams } from "wouter";
 import { Editor, SuggestionPicker } from "../components/Editor";
-import { ChevronLeft, Comment, Hash, Pencil, Plus, Trash } from "../components/icons";
+import {
+  ChevronDown,
+  ChevronLeft,
+  Close,
+  Comment,
+  Hash,
+  Pencil,
+  Plus,
+  Trash,
+} from "../components/icons";
 import { OAuthButtons } from "../components/OAuthButtons";
 import { PostLink, RichText } from "../components/RichText";
 import { Avatar, Empty, ErrorText, RoleBadge } from "../components/ui";
 import type { ChangelogComment, ChangelogEntry } from "../lib/api";
 import { longDate, timeAgo } from "../lib/format";
 import {
+  type ChangelogDraft,
   can,
   useAddChangelogComment,
   useAuthMethods,
   useChangelog,
   useChangelogEntry,
+  useChangelogPeople,
   useChangelogReaction,
   useCreateChangelogEntry,
   useDeleteChangelogComment,
@@ -277,6 +296,43 @@ function PublishedEntry({
             <RichText html={entry.body} />
           </div>
         )}
+        {entry.sections.some((section) => section.body) && (
+          <ul className="mt-5 flex flex-col gap-2">
+            {entry.sections.map((section) =>
+              section.body ? (
+                <li
+                  key={section.id}
+                  className="grid grid-cols-[6.75rem_minmax(0,1fr)] items-center gap-3"
+                >
+                  <span
+                    className={`inline-flex h-6 items-center justify-center rounded-full px-2 text-[12px] font-medium ${sectionTone(section.label)}`}
+                  >
+                    <span className="truncate">{section.label}</span>
+                  </span>
+                  <span className="text-[13px] leading-6">{stripHtml(section.body)}</span>
+                </li>
+              ) : null,
+            )}
+          </ul>
+        )}
+        {entry.contributors.length > 0 && (
+          <div className="mt-6">
+            <p className="text-[12px] font-medium text-muted">
+              People who contributed to this update
+            </p>
+            <ul className="mt-2 flex flex-wrap gap-2">
+              {entry.contributors.map((person) => (
+                <li
+                  key={person.id}
+                  className="inline-flex items-center gap-1.5 rounded-full bg-hover/70 py-1 pr-2.5 pl-1"
+                >
+                  <Avatar name={person.name} src={person.avatarUrl} size="xs" />
+                  <span className="text-[12px]">{person.name}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
         {children}
         <ErrorText error={deleteError} />
       </div>
@@ -318,6 +374,209 @@ function FeedbackLink({
   );
 }
 
+interface SectionDraft {
+  key: string;
+  label: string;
+  body: string;
+}
+
+function isPreset(label: string) {
+  return CHANGELOG_SECTIONS.some((preset) => preset.toLowerCase() === label.toLowerCase());
+}
+
+function sectionTone(label: string) {
+  switch (label.trim().toLowerCase()) {
+    case "changed":
+      return "bg-sky-400/15 text-sky-300";
+    case "fixed":
+      return "bg-emerald-400/15 text-emerald-400";
+    case "removed":
+      return "bg-rose-400/15 text-rose-400";
+    default:
+      return "bg-hover text-muted";
+  }
+}
+
+function SectionFields({
+  sections,
+  onChange,
+}: {
+  sections: SectionDraft[];
+  onChange: (sections: SectionDraft[]) => void;
+}) {
+  function update(key: string, patch: Partial<SectionDraft>) {
+    onChange(sections.map((section) => (section.key === key ? { ...section, ...patch } : section)));
+  }
+
+  function add() {
+    if (sections.length >= CHANGELOG_LIMITS.sections) return;
+    onChange([...sections, { key: crypto.randomUUID(), label: "Changed", body: "" }]);
+  }
+
+  return (
+    <div className="flex flex-col gap-2">
+      <p className="text-[12px] font-medium text-muted">Sections</p>
+      {sections.length > 0 && (
+        <ul className="flex flex-col gap-2">
+          {sections.map((section) => (
+            <li key={section.key} className="flex items-center gap-2">
+              {isPreset(section.label) ? (
+                <div
+                  className={`relative w-[6.75rem] shrink-0 rounded-full ${sectionTone(section.label)}`}
+                >
+                  <select
+                    aria-label="Section"
+                    className="h-8 w-full appearance-none bg-transparent pr-6 pl-2.5 text-[12px] font-medium outline-none"
+                    value={section.label}
+                    onChange={(e) =>
+                      update(section.key, {
+                        label: e.target.value === "__custom" ? "" : e.target.value,
+                      })
+                    }
+                  >
+                    {CHANGELOG_SECTIONS.map((label) => (
+                      <option key={label} value={label}>
+                        {label}
+                      </option>
+                    ))}
+                    <option value="__custom">Other</option>
+                  </select>
+                  <ChevronDown
+                    width={12}
+                    height={12}
+                    className="pointer-events-none absolute top-1/2 right-2 -translate-y-1/2 opacity-80"
+                  />
+                </div>
+              ) : (
+                <input
+                  aria-label="Section name"
+                  className="h-8 w-[6.75rem] shrink-0 rounded-full bg-hover px-2.5 text-[12px] font-medium text-muted outline-none"
+                  placeholder="Name"
+                  value={section.label}
+                  maxLength={CHANGELOG_LIMITS.sectionLabel}
+                  onChange={(e) => update(section.key, { label: e.target.value })}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") e.preventDefault();
+                  }}
+                />
+              )}
+              <input
+                className="h-8 min-w-0 flex-1 rounded-full bg-hover/70 px-3.5 text-[13px] outline-none placeholder:text-faint focus:bg-hover"
+                placeholder={
+                  section.label ? `What was ${section.label.toLowerCase()}?` : "What changed?"
+                }
+                value={section.body}
+                maxLength={LIMITS.body}
+                onChange={(e) => update(section.key, { body: e.target.value })}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") e.preventDefault();
+                }}
+              />
+              <button
+                type="button"
+                aria-label={`Remove ${section.label}`}
+                className="inline-flex size-7 items-center justify-center rounded-full text-faint hover:bg-hover hover:text-fg"
+                onClick={() => onChange(sections.filter((item) => item.key !== section.key))}
+              >
+                <Close width={12} height={12} />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {sections.length < CHANGELOG_LIMITS.sections && (
+        <button type="button" className="btn-quiet h-7 w-fit px-2.5" onClick={add}>
+          <Plus /> Add a line
+        </button>
+      )}
+    </div>
+  );
+}
+
+function ContributorFields({
+  people,
+  onChange,
+}: {
+  people: ChangelogEntry["contributors"];
+  onChange: (people: ChangelogEntry["contributors"]) => void;
+}) {
+  const { data } = useChangelogPeople();
+  const [query, setQuery] = useState("");
+  const [open, setOpen] = useState(false);
+  const chosen = new Set(people.map((person) => person.id));
+  const needle = query.trim().toLowerCase();
+  const matches = (data?.people ?? [])
+    .filter((person) => !chosen.has(person.id))
+    .filter((person) => !needle || person.name.toLowerCase().includes(needle))
+    .slice(0, 8);
+
+  return (
+    <div className="flex flex-col gap-2">
+      <p className="text-[12px] font-medium text-muted">People who contributed to this update</p>
+      {people.length > 0 && (
+        <ul className="flex flex-wrap gap-1.5">
+          {people.map((person) => (
+            <li
+              key={person.id}
+              className="inline-flex h-7 items-center gap-1.5 rounded-full bg-hover py-1 pr-1.5 pl-1"
+            >
+              <Avatar name={person.name} src={person.avatarUrl} size="xs" />
+              <span className="text-[12px]">{person.name}</span>
+              <button
+                type="button"
+                aria-label={`Remove ${person.name}`}
+                className="text-faint hover:text-fg"
+                onClick={() => onChange(people.filter((item) => item.id !== person.id))}
+              >
+                <Close width={10} height={10} />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {people.length < CHANGELOG_LIMITS.contributors && (
+        <div className="relative max-w-64">
+          <input
+            className="input"
+            placeholder="Add someone"
+            value={query}
+            onChange={(e) => {
+              setQuery(e.target.value);
+              setOpen(true);
+            }}
+            onFocus={() => setOpen(true)}
+            onBlur={() => setOpen(false)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") e.preventDefault();
+            }}
+          />
+          {open && matches.length > 0 && (
+            <ul className="menu absolute z-10 mt-1 w-full py-1">
+              {matches.map((person) => (
+                <li key={person.id}>
+                  <button
+                    type="button"
+                    className="menu-item"
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => {
+                      onChange([...people, person]);
+                      setQuery("");
+                      setOpen(false);
+                    }}
+                  >
+                    <Avatar name={person.name} src={person.avatarUrl} size="xs" />
+                    <span className="truncate">{person.name}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function EntryForm({
   entry,
   pending,
@@ -325,16 +584,24 @@ function EntryForm({
   onDone,
   onSubmit,
 }: {
-  entry?: { title: string; body: string; linkedPost: { id: number; title: string } | null };
+  entry?: ChangelogEntry;
   pending?: boolean;
   error?: Error | null;
   onDone: () => void;
-  onSubmit?: (body: { title: string; body: string; postId: number | null }) => void;
+  onSubmit?: (body: ChangelogDraft) => void;
 }) {
   const create = useCreateChangelogEntry();
   const [, navigate] = useLocation();
   const [title, setTitle] = useState(entry?.title ?? "");
   const [body, setBody] = useState(entry?.body ?? "");
+  const [sections, setSections] = useState<SectionDraft[]>(() =>
+    (entry?.sections ?? []).map((section) => ({
+      key: `section-${section.id}`,
+      label: section.label,
+      body: stripHtml(section.body),
+    })),
+  );
+  const [contributors, setContributors] = useState(entry?.contributors ?? []);
   const [linked, setLinked] = useState(entry?.linkedPost ?? null);
   const [picking, setPicking] = useState(false);
   const busy = pending ?? create.isPending;
@@ -342,7 +609,15 @@ function EntryForm({
 
   function submit(e: FormEvent) {
     e.preventDefault();
-    const next = { title: title.trim(), body, postId: linked?.id ?? null };
+    const next = {
+      title: title.trim(),
+      body,
+      postId: linked?.id ?? null,
+      sections: sections
+        .filter((section) => section.label.trim() && section.body.trim())
+        .map((section) => ({ label: section.label.trim(), body: section.body.trim() })),
+      contributorIds: contributors.map((person) => person.id),
+    };
     if (onSubmit) {
       onSubmit(next);
       return;
@@ -375,6 +650,8 @@ function EntryForm({
           mentions
           headings
         />
+        <SectionFields sections={sections} onChange={setSections} />
+        <ContributorFields people={contributors} onChange={setContributors} />
         <FeedbackLink
           linked={linked}
           picking={picking}
