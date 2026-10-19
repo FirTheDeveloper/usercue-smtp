@@ -1,9 +1,13 @@
-name: Image
+name: Release image
 
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
+    inputs:
+      tag:
+        description: Tag to publish with this release
+        required: true
+        default: latest
+        type: string
 
 permissions:
   contents: read
@@ -30,7 +34,17 @@ jobs:
           tags: |
             ghcr.io/paddlewheel-inc/usercue:latest
             ghcr.io/paddlewheel-inc/usercue:${{ github.sha }}
+            ghcr.io/paddlewheel-inc/usercue:${{ inputs.tag }}
           labels: |
             org.opencontainers.image.source=https://github.com/Paddlewheel-Inc/usercue
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Make the package public
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh api --method PATCH \
+            -H "Accept: application/vnd.github+json" \
+            "/orgs/${{ github.repository_owner }}/packages/container/usercue" \
+            -f visibility=public
