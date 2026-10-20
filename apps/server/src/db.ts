@@ -201,7 +201,9 @@ const SCHEMA = `
     teams_enabled          INTEGER NOT NULL DEFAULT 0,
     teams_webhook_cipher   TEXT NOT NULL DEFAULT '',
     teams_webhook_hash     TEXT NOT NULL DEFAULT '',
-    oauth_only             INTEGER NOT NULL DEFAULT 0
+    oauth_only             INTEGER NOT NULL DEFAULT 0,
+    customer_tags          INTEGER NOT NULL DEFAULT 0,
+    customer_tags_required INTEGER NOT NULL DEFAULT 0
   );
   INSERT INTO workspace (id) VALUES (1) ON CONFLICT (id) DO NOTHING;
 
@@ -381,6 +383,8 @@ const MIGRATE = `
   ALTER TABLE workspace ADD COLUMN IF NOT EXISTS teams_webhook_cipher TEXT NOT NULL DEFAULT '';
   ALTER TABLE workspace ADD COLUMN IF NOT EXISTS teams_webhook_hash TEXT NOT NULL DEFAULT '';
   ALTER TABLE workspace ADD COLUMN IF NOT EXISTS oauth_only INTEGER NOT NULL DEFAULT 0;
+  ALTER TABLE workspace ADD COLUMN IF NOT EXISTS customer_tags INTEGER NOT NULL DEFAULT 0;
+  ALTER TABLE workspace ADD COLUMN IF NOT EXISTS customer_tags_required INTEGER NOT NULL DEFAULT 0;
   ALTER TABLE posts ADD COLUMN IF NOT EXISTS assignee_id INTEGER REFERENCES users(id) ON DELETE SET NULL;
   ALTER TABLE comments ADD COLUMN IF NOT EXISTS parent_id INTEGER REFERENCES comments(id) ON DELETE CASCADE;
   CREATE INDEX IF NOT EXISTS comments_parent ON comments(parent_id);

@@ -1671,6 +1671,10 @@ function RolePermissions({
 }
 
 function TagsSettings() {
+  const { data: me } = useMe();
+  const canSettings = can(me, "manage_settings");
+  const { data: settings } = useSettings(canSettings);
+  const save = useSaveSettings();
   const { data: tags = [], isLoading } = useTags();
   const create = useCreateTag();
   const update = useUpdateTag();
@@ -1685,6 +1689,47 @@ function TagsSettings() {
 
   return (
     <div className="flex flex-col gap-8">
+      {canSettings && (
+        <section className="flex flex-col gap-3">
+          <div>
+            <h2 className="text-[13px] font-medium">Who can tag</h2>
+            <p className="mt-1 text-[12px] text-muted">
+              Let people pick a tag when they post, such as a bug report or a suggestion. Require
+              one when every suggestion needs a category.
+            </p>
+          </div>
+          <Checkbox
+            checked={settings?.customerTags ?? false}
+            disabled={save.isPending}
+            onChange={(checked) =>
+              save.mutate(
+                checked
+                  ? { customerTags: true }
+                  : { customerTags: false, customerTagsRequired: false },
+              )
+            }
+          >
+            Let people choose a tag on a new suggestion
+          </Checkbox>
+          <Checkbox
+            checked={settings?.customerTagsRequired ?? false}
+            disabled={save.isPending || (!isLoading && tags.length === 0)}
+            onChange={(checked) =>
+              save.mutate(
+                checked
+                  ? { customerTags: true, customerTagsRequired: true }
+                  : { customerTagsRequired: false },
+              )
+            }
+          >
+            Require a tag before a suggestion can be posted
+          </Checkbox>
+          {!isLoading && tags.length === 0 && (
+            <p className="text-[12px] text-faint">Add a tag before you can require one.</p>
+          )}
+          <ErrorText error={save.error} />
+        </section>
+      )}
       <section className="flex flex-col gap-3">
         <div>
           <h2 className="text-[13px] font-medium">Tags</h2>

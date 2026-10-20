@@ -7,7 +7,13 @@ import { type AppEnv, rateLimit, requirePermission } from "../middleware";
 import { notifyComment, notifyNewPost, notifyStatusChange } from "../notify";
 import { publicOrigin } from "../oauth";
 import { hasPermission, parsePermissions } from "../roles";
-import { assignmentMode, guestsAllowed, listAssignableStaff, pickNextAssignee } from "../workspace";
+import {
+  assignmentMode,
+  customerTagMode,
+  guestsAllowed,
+  listAssignableStaff,
+  pickNextAssignee,
+} from "../workspace";
 
 const text = (max: number) => v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(max));
 const numberParam = (min: number, max: number) =>
@@ -27,6 +33,7 @@ const createPost = v.object({
   title: text(LIMITS.title),
   body: v.optional(v.pipe(v.string(), v.trim(), v.maxLength(LIMITS.body)), ""),
   name: v.optional(text(LIMITS.name)),
+  tagIds: v.optional(v.array(v.pipe(v.number(), v.integer(), v.minValue(1)))),
 });
 
 const updatePost = v.object({
@@ -369,7 +376,7 @@ export const posts = new Hono<AppEnv>()
   })
 
   .post("/", rateLimit(10, 60), vValidator("json", createPost), async (c) => {
-    const { board, title, body, name } = c.req.valid("json");
+    const { board, title, body, name, tagIds: rawTagIds } = c.req.valid("json");
     const team = c.get("user");
     const identity = c.get("identity");
     if (team?.suspended) return c.json({ error: "Your account has been suspended." }, 403);
@@ -378,6 +385,17 @@ export const posts = new Hono<AppEnv>()
     }
     const author = team?.name ?? identity?.name ?? name;
     if (!author) return c.json({ error: "Name is required" }, 400);
+
+    const tags = await customerTagMode();
+    const tagIds = tags.allowed ? [...new Set(rawTagIds ?? [])] : [];
+    if (tagIds.length > 8) return c.json({ error: "A suggestion can have up to 8 tags." }, 400);
+    if (tags.required && tagIds.length === 0) return c.json({ error: "Choose a tag." }, 400);
+    if (tagIds.length) {
+      const known = new Set((await listTagIds.all()).map((tag) => tag.id));
+      if (tagIds.some((tagId) => !known.has(tagId))) {
+        return c.json({ error: "Unknown tag." }, 400);
+      }
+    }
 
     const boardRow = await boardBySlug.get(board);
     if (!boardRow) return c.json({ error: "Board not found" }, 404);
@@ -390,6 +408,7 @@ export const posts = new Hono<AppEnv>()
       team?.id ?? null,
     );
     if (!created) return c.json({ error: "Could not create post" }, 500);
+    if (tagIds.length) await replaceTags(created.id, tagIds);
 
     await toggleVote(created.id, c.get("visitorId"));
     await insertStatusChange.run(created.id, "open", team?.id ?? null, author);
