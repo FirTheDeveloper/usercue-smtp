@@ -521,6 +521,14 @@ export function useUpdateRole() {
   });
 }
 
+export function useReorderRoles() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (ids: number[]) => unwrap(api.settings.roles.order.$patch({ json: { ids } })),
+    onSuccess: (data) => qc.setQueryData(["settings-roles"], data),
+  });
+}
+
 export function useDeleteRole() {
   const qc = useQueryClient();
   return useMutation({

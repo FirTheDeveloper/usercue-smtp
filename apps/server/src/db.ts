@@ -223,6 +223,7 @@ const SCHEMA = `
     locked      INTEGER NOT NULL DEFAULT 0,
     permissions TEXT NOT NULL DEFAULT '[]',
     icon_url    TEXT NOT NULL DEFAULT '',
+    position    INTEGER NOT NULL DEFAULT 0,
     created_at  BIGINT NOT NULL DEFAULT (EXTRACT(EPOCH FROM NOW())::BIGINT)
   );
 
@@ -297,6 +298,14 @@ const MIGRATE = `
   CREATE INDEX IF NOT EXISTS status_changes_post ON status_changes(post_id, created_at, id);
 
   ALTER TABLE roles ADD COLUMN IF NOT EXISTS icon_url TEXT NOT NULL DEFAULT '';
+  ALTER TABLE roles ADD COLUMN IF NOT EXISTS position INTEGER NOT NULL DEFAULT 0;
+  UPDATE roles AS r
+  SET position = ranked.ord
+  FROM (
+    SELECT id, (ROW_NUMBER() OVER (ORDER BY id) - 1)::int AS ord FROM roles
+  ) AS ranked
+  WHERE r.id = ranked.id
+    AND (SELECT COUNT(DISTINCT position) FROM roles) <= 1;
   ALTER TABLE roles ADD COLUMN IF NOT EXISTS key TEXT;
   CREATE UNIQUE INDEX IF NOT EXISTS roles_key ON roles(key);
   UPDATE roles SET key = 'owner' WHERE key IS NULL AND locked = 1;

@@ -103,7 +103,7 @@ const setSuspended = db.query("UPDATE users SET suspended = ? WHERE id = ?");
 const setUserRole = db.query("UPDATE users SET role_id = ? WHERE id = ?");
 
 const listRoles = db.query<RoleRow>(
-  "SELECT id, name, locked, permissions, icon_url FROM roles ORDER BY id",
+  "SELECT id, name, locked, permissions, icon_url FROM roles ORDER BY position, id",
 );
 const findRole = db.query<RoleRow>(
   "SELECT id, name, locked, permissions, icon_url FROM roles WHERE id = ?",
@@ -112,12 +112,15 @@ const findRoleByName = db.query<{ id: number }>(
   "SELECT id FROM roles WHERE lower(name) = lower(?)",
 );
 const insertRole = db.query<RoleRow>(
-  "INSERT INTO roles (name, locked, permissions, icon_url) VALUES (?, 0, ?, ?) RETURNING id, name, locked, permissions, icon_url",
+  `INSERT INTO roles (name, locked, permissions, icon_url, position)
+   VALUES (?, 0, ?, ?, (SELECT COALESCE(MAX(position), -1) + 1 FROM roles))
+   RETURNING id, name, locked, permissions, icon_url`,
 );
 const updateRole = db.query<RoleRow>(
   "UPDATE roles SET name = ?, permissions = ?, icon_url = ? WHERE id = ? RETURNING id, name, locked, permissions, icon_url",
 );
 const deleteRole = db.query("DELETE FROM roles WHERE id = ? AND locked = 0");
+const setRolePosition = db.query("UPDATE roles SET position = ? WHERE id = ?");
 const countRoleUsers = db.query<{ n: number }>(
   "SELECT COUNT(*)::int AS n FROM users WHERE role_id = ?",
 );
@@ -442,6 +445,37 @@ export const settings = new Hono<AppEnv>()
       const row = await insertRole.get(name, encodePermissions(permissions), iconUrl ?? "");
       if (!row) return c.json({ error: "Could not create the role." }, 500);
       return c.json(await rolesPayload(), 201);
+    },
+  )
+
+  .patch(
+    "/roles/order",
+    requirePermission("manage_roles"),
+    vValidator(
+      "json",
+      v.object({
+        ids: v.pipe(
+          v.array(v.pipe(v.number(), v.integer(), v.minValue(1))),
+          v.minLength(1),
+          v.maxLength(100),
+        ),
+      }),
+    ),
+    async (c) => {
+      const { ids } = c.req.valid("json");
+      const roles = await listRoles.all();
+      const known = new Set(roles.map((role) => role.id));
+      const complete =
+        ids.length === roles.length &&
+        new Set(ids).size === ids.length &&
+        ids.every((id) => known.has(id));
+      if (!complete) return c.json({ error: "Send every role in the new order." }, 400);
+      await db.transaction(async () => {
+        for (const [position, id] of ids.entries()) {
+          await setRolePosition.run(position, id);
+        }
+      });
+      return c.json(await rolesPayload());
     },
   )
 

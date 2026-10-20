@@ -31,6 +31,7 @@ import {
   useMe,
   useProviders,
   useRemoveStaff,
+  useReorderRoles,
   useRevokeInvite,
   useRoles,
   useSaveBranding,
@@ -1362,11 +1363,27 @@ function UserMore({
   );
 }
 
+function moveRole(
+  roles: { id: number }[],
+  index: number,
+  delta: number,
+  save: (ids: number[]) => void,
+) {
+  const next = index + delta;
+  if (next < 0 || next >= roles.length) return;
+  const ids = roles.map((role) => role.id);
+  const [id] = ids.splice(index, 1);
+  if (id === undefined) return;
+  ids.splice(next, 0, id);
+  save(ids);
+}
+
 function RolesSettings() {
   const { data, isLoading } = useRoles();
   const create = useCreateRole();
   const update = useUpdateRole();
   const remove = useDeleteRole();
+  const reorder = useReorderRoles();
   const [name, setName] = useState("");
   const [creating, setCreating] = useState<Permission[]>([]);
   const [editing, setEditing] = useState<number | null>(null);
@@ -1415,11 +1432,31 @@ function RolesSettings() {
         </div>
 
         <ul className="flex flex-col gap-4">
-          {data.roles.map((role) => {
+          {data.roles.map((role, index) => {
             const open = editing === role.id;
             return (
               <li key={role.id} className="flex flex-col gap-3 border-b pb-4 last:border-0">
                 <div className="flex flex-wrap items-center gap-2">
+                  <div className="flex shrink-0 flex-col">
+                    <button
+                      type="button"
+                      aria-label={`Move ${role.name} up`}
+                      className="inline-flex size-4 items-center justify-center text-faint hover:text-fg disabled:opacity-30"
+                      disabled={index === 0 || reorder.isPending}
+                      onClick={() => moveRole(data.roles, index, -1, (ids) => reorder.mutate(ids))}
+                    >
+                      <ChevronDown width={12} height={12} className="rotate-180" />
+                    </button>
+                    <button
+                      type="button"
+                      aria-label={`Move ${role.name} down`}
+                      className="inline-flex size-4 items-center justify-center text-faint hover:text-fg disabled:opacity-30"
+                      disabled={index === data.roles.length - 1 || reorder.isPending}
+                      onClick={() => moveRole(data.roles, index, 1, (ids) => reorder.mutate(ids))}
+                    >
+                      <ChevronDown width={12} height={12} />
+                    </button>
+                  </div>
                   <RoleIconPreview iconUrl={role.iconUrl} />
                   <div className="min-w-0 flex-1">
                     <p className="text-[13px] font-medium">{role.name}</p>
@@ -1484,7 +1521,7 @@ function RolesSettings() {
             );
           })}
         </ul>
-        <ErrorText error={update.error ?? remove.error} />
+        <ErrorText error={update.error ?? remove.error ?? reorder.error} />
       </section>
 
       <form onSubmit={submitCreate} className="flex flex-col gap-3">
