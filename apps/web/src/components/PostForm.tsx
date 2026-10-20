@@ -1,7 +1,7 @@
-import { LIMITS } from "@usercue/shared";
+import { LIMITS, tagColorHex } from "@usercue/shared";
 import { type FormEvent, useState } from "react";
 import { getSavedName, saveName } from "../lib/format";
-import { useAuthMethods, useCreatePost, useMe } from "../lib/queries";
+import { useAuthMethods, useCreatePost, useMe, useTags } from "../lib/queries";
 import { Editor } from "./Editor";
 import { OAuthButtons } from "./OAuthButtons";
 import { ErrorText } from "./ui";
@@ -10,10 +10,14 @@ export function PostForm({ board, defaultOpen = false }: { board: string; defaul
   const { data: me } = useMe();
   const { data: methods } = useAuthMethods();
   const create = useCreatePost();
+  const allowTags = Boolean(me?.customerTags);
+  const requireTags = Boolean(me?.customerTagsRequired);
+  const { data: tags = [] } = useTags(allowTags);
   const [open, setOpen] = useState(defaultOpen);
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [name, setName] = useState(getSavedName);
+  const [tagIds, setTagIds] = useState<number[]>([]);
 
   const user = me?.user;
   const identity = me?.identity;
@@ -21,7 +25,16 @@ export function PostForm({ board, defaultOpen = false }: { board: string; defaul
   const allowGuest = me?.allowGuestFeedback !== false;
   const mustSignIn = guest && !allowGuest;
   const suspended = Boolean(user?.suspended);
-  const canPost = !mustSignIn && !suspended;
+  const needsTag = requireTags && tagIds.length === 0;
+  const canPost = !mustSignIn && !suspended && !needsTag;
+
+  function toggleTag(id: number) {
+    setTagIds((current) => {
+      if (current.includes(id)) return current.filter((item) => item !== id);
+      if (current.length >= 8) return current;
+      return [...current, id];
+    });
+  }
 
   function submit(e: FormEvent) {
     e.preventDefault();
@@ -29,11 +42,12 @@ export function PostForm({ board, defaultOpen = false }: { board: string; defaul
     if (author) saveName(author);
 
     create.mutate(
-      { board, title, body, name: author },
+      { board, title, body, name: author, tagIds: allowTags ? tagIds : undefined },
       {
         onSuccess: () => {
           setTitle("");
           setBody("");
+          setTagIds([]);
           setOpen(false);
         },
       },
@@ -54,6 +68,37 @@ export function PostForm({ board, defaultOpen = false }: { board: string; defaul
       {open && (
         <div className="flex animate-rise flex-col gap-3 px-4 pb-3">
           <Editor value={body} onChange={setBody} maxLength={LIMITS.body} mentions />
+          {allowTags && tags.length > 0 && (
+            <div className="flex flex-col gap-1.5">
+              <p className="text-[12px] text-muted">
+                {requireTags ? "Choose a tag" : "Add a tag (optional)"}
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {tags.map((tag) => {
+                  const selected = tagIds.includes(tag.id);
+                  return (
+                    <button
+                      key={tag.id}
+                      type="button"
+                      aria-pressed={selected}
+                      className={`inline-flex h-6 max-w-full items-center gap-1.5 rounded-full px-2 text-[11px] font-medium transition-colors ${
+                        selected
+                          ? "bg-accent-soft text-accent-text"
+                          : "bg-hover text-muted hover:text-fg"
+                      }`}
+                      onClick={() => toggleTag(tag.id)}
+                    >
+                      <span
+                        className="size-1.5 shrink-0 rounded-full"
+                        style={{ background: tagColorHex(tag.color) }}
+                      />
+                      <span className="truncate">{tag.name}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
           {guest && Boolean(methods?.providers.length) && (
             <div className="flex flex-col gap-2 border-t pt-3">
               <OAuthButtons next="board" />

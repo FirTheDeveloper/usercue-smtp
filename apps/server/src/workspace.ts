@@ -25,6 +25,8 @@ export interface WorkspaceRow {
   teams_webhook_cipher: string;
   teams_webhook_hash: string;
   oauth_only: number;
+  customer_tags: number;
+  customer_tags_required: number;
   site_name: string;
   site_description: string;
   favicon_url: string;
@@ -62,7 +64,9 @@ const update = db.query(
      teams_enabled = ?,
      teams_webhook_cipher = ?,
      teams_webhook_hash = ?,
-     oauth_only = ?
+     oauth_only = ?,
+     customer_tags = ?,
+     customer_tags_required = ?
    WHERE id = 1`,
 );
 const updateBranding = db.query(
@@ -107,6 +111,8 @@ const empty: WorkspaceRow = {
   teams_webhook_cipher: "",
   teams_webhook_hash: "",
   oauth_only: 0,
+  customer_tags: 0,
+  customer_tags_required: 0,
   site_name: "",
   site_description: "",
   favicon_url: "",
@@ -145,6 +151,8 @@ export async function saveWorkspace(patch: {
   teamsEnabled?: boolean;
   teamsWebhookUrl?: string;
   oauthOnly?: boolean;
+  customerTags?: boolean;
+  customerTagsRequired?: boolean;
 }) {
   const current = await getWorkspace();
   const allow =
@@ -188,6 +196,10 @@ export async function saveWorkspace(patch: {
     ? hashSecret(patch.teamsWebhookUrl.trim())
     : current.teams_webhook_hash;
   const oauth = flag(patch.oauthOnly, current.oauth_only);
+  let customerTags = flag(patch.customerTags, current.customer_tags);
+  let customerTagsRequired = flag(patch.customerTagsRequired, current.customer_tags_required);
+  if (customerTagsRequired) customerTags = 1;
+  if (!customerTags) customerTagsRequired = 0;
   await update.run(
     allow,
     resend,
@@ -205,6 +217,8 @@ export async function saveWorkspace(patch: {
     teamsCipher,
     teamsHash,
     oauth,
+    customerTags,
+    customerTagsRequired,
   );
   return getWorkspace();
 }
@@ -245,6 +259,12 @@ export async function workspaceBranding(): Promise<Branding> {
 
 export async function oauthOnly() {
   return (await getWorkspace()).oauth_only === 1;
+}
+
+export async function customerTagMode() {
+  const row = await getWorkspace();
+  const allowed = row.customer_tags === 1;
+  return { allowed, required: allowed && row.customer_tags_required === 1 };
 }
 
 export interface ChangelogFlags {

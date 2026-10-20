@@ -77,8 +77,13 @@ function useInvalidatePosts() {
 export function useCreatePost() {
   const invalidate = useInvalidatePosts();
   return useMutation({
-    mutationFn: (body: { board: string; title: string; body: string; name?: string }) =>
-      unwrap(api.posts.$post({ json: body })),
+    mutationFn: (body: {
+      board: string;
+      title: string;
+      body: string;
+      name?: string;
+      tagIds?: number[];
+    }) => unwrap(api.posts.$post({ json: body })),
     onSuccess: invalidate,
   });
 }
@@ -381,6 +386,8 @@ export function useSaveSettings() {
       teamsEnabled?: boolean;
       teamsWebhookUrl?: string;
       oauthOnly?: boolean;
+      customerTags?: boolean;
+      customerTagsRequired?: boolean;
     }) => unwrap(api.settings.$patch({ json })),
     onSuccess: (data) => {
       qc.setQueryData(["settings"], data);

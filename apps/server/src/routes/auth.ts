@@ -16,6 +16,7 @@ import { ownerRoleId, staffRoleId } from "../roles";
 import {
   assignmentMode,
   changelogFlags,
+  customerTagMode,
   guestsAllowed,
   oauthOnly,
   workspaceAccent,
@@ -81,6 +82,8 @@ export const auth = new Hono<AppEnv>()
       identity: c.get("identity"),
       needsSetup: await needsSetup(),
       allowGuestFeedback: await guestsAllowed(),
+      customerTags: (await customerTagMode()).allowed,
+      customerTagsRequired: (await customerTagMode()).required,
       changelogEnabled: (await changelogFlags()).enabled,
       assignmentMode: await assignmentMode(),
       accent: await workspaceAccent(),

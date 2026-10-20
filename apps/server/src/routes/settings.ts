@@ -37,6 +37,7 @@ const INVITE_TTL = 60 * 60 * 24 * 7;
 const countEnabledProviders = db.query<{ n: number }>(
   "SELECT COUNT(*)::int AS n FROM oauth_providers WHERE enabled = 1",
 );
+const countTags = db.query<{ n: number }>("SELECT COUNT(*)::int AS n FROM tags");
 
 interface StaffRow {
   id: number;
@@ -228,6 +229,8 @@ async function snapshot(origin: string) {
       keyHash: workspace.teams_webhook_hash ? workspace.teams_webhook_hash.slice(0, 12) : null,
     },
     oauthOnly: workspace.oauth_only === 1,
+    customerTags: workspace.customer_tags === 1,
+    customerTagsRequired: workspace.customer_tags === 1 && workspace.customer_tags_required === 1,
     staff: (await listPeople.all()).filter(isStaffRow).map((row) => ({
       id: row.id,
       email: row.email,
@@ -295,6 +298,8 @@ export const settings = new Hono<AppEnv>()
         teamsEnabled: v.optional(v.boolean()),
         teamsWebhookUrl: v.optional(v.pipe(v.string(), v.trim(), v.maxLength(2000))),
         oauthOnly: v.optional(v.boolean()),
+        customerTags: v.optional(v.boolean()),
+        customerTagsRequired: v.optional(v.boolean()),
       }),
     ),
     async (c) => {
@@ -321,6 +326,10 @@ export const settings = new Hono<AppEnv>()
       }
       if (body.teamsEnabled && !teamsUrl && !current.teams_webhook_cipher) {
         return c.json({ error: "Add a Teams webhook URL first." }, 400);
+      }
+      if (body.customerTagsRequired) {
+        const tags = await countTags.get();
+        if (!tags?.n) return c.json({ error: "Add a tag before requiring one." }, 400);
       }
       if (body.oauthOnly) {
         const enabled = await countEnabledProviders.get();

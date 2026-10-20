@@ -4,6 +4,7 @@ import { Hono } from "hono";
 import * as v from "valibot";
 import { db } from "../db";
 import { type AppEnv, requirePermission } from "../middleware";
+import { customerTagMode } from "../workspace";
 
 const tagName = v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(24));
 const tagColor = v.picklist(TAG_COLOR_IDS);
@@ -82,6 +83,10 @@ export const tags = new Hono<AppEnv>()
   )
 
   .delete("/:id", canManageTags, vValidator("param", idParam), async (c) => {
+    const { required } = await customerTagMode();
+    if (required && (await listTags.all()).length <= 1) {
+      return c.json({ error: "Turn off required tags before deleting the last one." }, 400);
+    }
     await deleteTag.run(c.req.valid("param").id);
     return c.json({ ok: true });
   });
