@@ -568,10 +568,13 @@ export const settings = new Hono<AppEnv>()
       if (!row) return c.json({ error: "Could not create the invite." }, 500);
 
       let warning: string | undefined;
-      if (await resendEnabled()) {
-        const result = await sendInviteEmail(email, inviteUrl(origin, row.token));
-        if (result.sent) await markInviteSent.run(row.id);
-        else warning = result.error;
+      const result = await sendInviteEmail(email, inviteUrl(origin, row.token));
+      if (result.sent) await markInviteSent.run(row.id);
+      else if (
+        result.error !== "SMTP email is not configured" &&
+        result.error !== "Invite email is turned off"
+      ) {
+        warning = result.error;
       }
 
       const fresh = (await findInviteByEmail.get(email, now)) ?? row;
