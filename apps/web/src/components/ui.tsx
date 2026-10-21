@@ -1,12 +1,5 @@
 import { STATUS_LABELS, type Status, tagColorHex } from "@usercue/shared";
-import {
-  createContext,
-  type ReactNode,
-  useCallback,
-  useContext,
-  useEffect,
-  useState,
-} from "react";
+import { createContext, type ReactNode, useCallback, useContext, useEffect, useState } from "react";
 import { ArrowUp, Check, Copy } from "./icons";
 
 export const STATUS_DOT: Record<Status, string> = {
@@ -215,7 +208,10 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const notify = useCallback((toast: ToastInput) => {
     const id = Date.now() + Math.random();
-    setToasts((current) => [...current, { id, message: toast.message, tone: toast.tone ?? "success" }]);
+    setToasts((current) => [
+      ...current,
+      { id, message: toast.message, tone: toast.tone ?? "success" },
+    ]);
     window.setTimeout(() => {
       setToasts((current) => current.filter((item) => item.id !== id));
     }, 4000);

@@ -16,7 +16,6 @@ import { resendConfigured, resendCredentials, resendEnabled, sendInviteEmail } f
 import { type AppEnv, randomToken, requirePermission, requireTeam } from "../middleware";
 import { discordConfigured, isDiscordWebhook, isTeamsWebhook, teamsConfigured } from "../notify";
 import { publicOrigin } from "../oauth";
-import { smtpConfigured } from "../smtp";
 import {
   countOwners,
   countWithPermission,
@@ -26,6 +25,7 @@ import {
   parsePermissions,
   staffRoleId,
 } from "../roles";
+import { smtpConfigured } from "../smtp";
 import {
   getWorkspace,
   parseAccent,
@@ -605,17 +605,19 @@ export const settings = new Hono<AppEnv>()
         : await insertInvite.get(token, email, invitedBy, now + INVITE_TTL);
       if (!row) return c.json({ error: "Could not create the invite." }, 500);
 
-      void sendInviteEmail(email, inviteUrl(origin, row.token)).then(async (result) => {
-        if (result.sent) await markInviteSent.run(row.id);
-        else if (
-          result.error !== "SMTP email is not configured" &&
-          result.error !== "Invite email is turned off"
-        ) {
-          console.error("Could not send invite email:", result.error);
-        }
-      }).catch((error: unknown) => {
-        console.error("Could not send invite email:", error);
-      });
+      void sendInviteEmail(email, inviteUrl(origin, row.token))
+        .then(async (result) => {
+          if (result.sent) await markInviteSent.run(row.id);
+          else if (
+            result.error !== "SMTP email is not configured" &&
+            result.error !== "Invite email is turned off"
+          ) {
+            console.error("Could not send invite email:", result.error);
+          }
+        })
+        .catch((error: unknown) => {
+          console.error("Could not send invite email:", error);
+        });
 
       return c.json({
         ...serializeInvite(origin, row),

@@ -329,7 +329,9 @@ function SmtpSettings() {
           }
         />
         {!data.smtp?.passConfigured && data.smtp?.fromEnv && (
-          <p className="px-1 text-[11px] text-faint">Using SMTP credentials from the environment.</p>
+          <p className="px-1 text-[11px] text-faint">
+            Using SMTP credentials from the environment.
+          </p>
         )}
       </label>
       <label className="flex flex-col gap-1.5">
