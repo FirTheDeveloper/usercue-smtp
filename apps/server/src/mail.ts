@@ -1,6 +1,6 @@
 import { env } from "./env";
 import { decryptSecret } from "./secret";
-import { sendSmtpEmail } from "./smtp";
+import { sendSmtpEmail, smtpEnabled } from "./smtp";
 import { getWorkspace } from "./workspace";
 
 export async function resendCredentials(): Promise<{ key: string; from: string } | null> {
@@ -56,5 +56,6 @@ export async function sendInviteEmail(
     return { sent: true };
   }
 
-  return sendSmtpEmail({ to, subject, html });
+  if (await smtpEnabled()) return sendSmtpEmail({ to, subject, html });
+  return { sent: false, error: "Invite email is turned off" };
 }

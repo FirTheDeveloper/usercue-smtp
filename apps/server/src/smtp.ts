@@ -1,5 +1,7 @@
 import nodemailer from "nodemailer";
 import { env } from "./env";
+import { decryptSecret } from "./secret";
+import { getWorkspace } from "./workspace";
 
 export interface SmtpCredentials {
   host: string;
@@ -10,23 +12,28 @@ export interface SmtpCredentials {
   secure: boolean;
 }
 
-export function smtpCredentials(): SmtpCredentials | null {
-  const host = env.smtpHost.trim();
-  const from = env.smtpFrom.trim();
+export async function smtpCredentials(): Promise<SmtpCredentials | null> {
+  const workspace = await getWorkspace();
+  const host = (workspace.smtp_host || env.smtpHost).trim();
+  const from = (workspace.smtp_from || env.smtpFrom).trim();
   if (!host || !from) return null;
 
   return {
     host,
-    port: env.smtpPort,
-    user: env.smtpUser,
-    pass: env.smtpPass,
+    port: workspace.smtp_host ? workspace.smtp_port : env.smtpPort,
+    user: workspace.smtp_host ? workspace.smtp_user : env.smtpUser,
+    pass: workspace.smtp_pass_cipher ? decryptSecret(workspace.smtp_pass_cipher) : env.smtpPass,
     from,
-    secure: env.smtpSecure,
+    secure: workspace.smtp_host ? workspace.smtp_secure === 1 : env.smtpSecure,
   };
 }
 
-export function smtpConfigured(): boolean {
-  return smtpCredentials() !== null;
+export async function smtpConfigured(): Promise<boolean> {
+  return (await smtpCredentials()) !== null;
+}
+
+export async function smtpEnabled(): Promise<boolean> {
+  return (await smtpConfigured()) && (await getWorkspace()).smtp_enabled === 1;
 }
 
 export async function sendSmtpEmail(input: {
@@ -34,7 +41,7 @@ export async function sendSmtpEmail(input: {
   subject: string;
   html: string;
 }): Promise<{ sent: boolean; error?: string }> {
-  const credentials = smtpCredentials();
+  const credentials = await smtpCredentials();
   if (!credentials) return { sent: false, error: "SMTP email is not configured" };
 
   try {
